@@ -1,0 +1,570 @@
+/* =======================
+   Global Styles
+======================= */
+:root {
+    --bg-dark-1: #0b1220;
+    --bg-dark-2: #0f172a;
+    --text-on-dark: #e5e7eb;
+    --muted-on-dark: #cbd5e1;
+    --accent-1: #60a5fa; /* sky-400 */
+    --accent-2: #a78bfa; /* violet-400 */
+    --accent-3: #22d3ee; /* cyan-400 */
+}
+body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #eef2ff, #fef9f9);
+    margin: 0;
+    padding: 0;
+    color: #2d3748;
+    min-height: 100vh;
+}
+
+a {
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+/* Subtle global enhancements */
+img { max-width: 100%; height: auto; display: block; }
+.container { max-width: 1200px; margin: 0 auto; }
+.shadow-soft { box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08); }
+.rounded-xl { border-radius: 16px; }
+
+/* Buttons (generic helpers to enhance existing Tailwind buttons) */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,0.08); }
+.btn:active { transform: translateY(0); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+
+/* NEW: Elevate all native buttons and submit inputs without changing semantics */
+button,
+input[type="submit"],
+input[type="button"],
+.button {
+    border-radius: 10px;
+    font-weight: 600;
+    transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover,
+.button:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,0.08); }
+button:active,
+input[type="submit"]:active,
+input[type="button"]:active,
+.button:active { transform: translateY(0); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+button:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="button"]:focus-visible,
+.button:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(59,130,246,.25); }
+
+/* NEW: Add tasteful gradients for common Tailwind color buttons (without breaking classes) */
+button.bg-blue-600, a.bg-blue-600 { background-image: linear-gradient(180deg, #2563eb, #1d4ed8); }
+button.bg-red-500, a.bg-red-500 { background-image: linear-gradient(180deg, #ef4444, #dc2626); }
+button.bg-green-600, a.bg-green-600 { background-image: linear-gradient(180deg, #16a34a, #15803d); }
+button.bg-indigo-600, a.bg-indigo-600 { background-image: linear-gradient(180deg, #4f46e5, #4338ca); }
+button:hover.bg-blue-600, a:hover.bg-blue-600 { filter: brightness(1.03); }
+button:hover.bg-red-500, a:hover.bg-red-500 { filter: brightness(1.03); }
+button:hover.bg-green-600, a:hover.bg-green-600 { filter: brightness(1.03); }
+button:hover.bg-indigo-600, a:hover.bg-indigo-600 { filter: brightness(1.03); }
+
+/* NEW: Subtle lift for common card containers in pages */
+.bg-white.rounded-lg,
+.bg-white.rounded-xl,
+.bg-white.shadow,
+.bg-white.shadow-md,
+.bg-white.shadow-lg {
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(17, 24, 39, 0.08);
+}
+
+/* NEW: Enhance headings visually without altering layout */
+h1, h2, h3 {
+    color: #0f172a;
+}
+.neon, .heading-accent {
+    background: linear-gradient(90deg, #1e3a8a, #3b82f6 50%, #22c55e);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+/* Reusable glass + neon border for dark backgrounds */
+.glass-dark {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 30px 80px rgba(0,0,0,.35);
+    border-radius: 16px;
+}
+.neon-border { position: relative; border-radius: 16px; }
+.neon-border::before {
+    content: "";
+    position: absolute; inset: 0; padding: 1px; border-radius: inherit;
+    background: linear-gradient(120deg, var(--accent-1), var(--accent-2), var(--accent-3));
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+    filter: drop-shadow(0 0 8px rgba(96,165,250,.35));
+}
+
+.text-on-dark { color: var(--text-on-dark); }
+.muted-on-dark { color: rgba(226,232,240,.75); }
+.icon-chip-dark {
+    background: rgba(255,255,255,0.12);
+    color: var(--text-on-dark);
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+/* NEW: Soft border accents for inset sections */
+.section-accent {
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+}
+
+/* Inputs (index page uses inputs; enhance focus) */
+input[type="text"], input[type="password"], input[type="number"], input[type="email"], select, textarea {
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    outline: none;
+    transition: box-shadow .2s ease, border-color .2s ease;
+}
+input:focus, select:focus, textarea:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 4px rgba(59,130,246,.15);
+}
+
+/* Tabs used on index page */
+.tab-button {
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: 0 6px 14px rgba(17, 24, 39, 0.06);
+}
+.tab-button:hover { transform: translateY(-1px); }
+.tab-active { background-color: #3b82f6; color: #fff; }
+.tab-inactive { background-color: #e5e7eb; color: #374151; }
+
+/* =======================
+   Sidebar
+======================= */
+#sidebar {
+    background: linear-gradient(180deg, #1e3a8a, #3b82f6);
+    color: #fff;
+    width: 256px; /* modern fixed width */
+    transition: width .3s ease, transform .6s cubic-bezier(.22,.61,.36,1);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.20);
+}
+
+.sidebar-button {
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.sidebar-button:hover {
+    background: rgba(255,255,255,0.15);
+    transform: translateX(5px);
+}
+
+.sidebar-button i {
+    font-size: 18px;
+    margin-right: 10px;
+}
+
+.sidebar-button span.label {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity .2s ease, transform .2s ease;
+    white-space: nowrap;
+}
+
+/* Transparent glass variant (overrides plain white rule below) */
+aside#sidebar.sidebar-glass {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #e5e7eb;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    width: 256px !important; /* Fixed width for w-64 (16rem = 256px) */
+    overflow: hidden;
+}
+aside#sidebar.sidebar-glass .border-b { border-color: rgba(255,255,255,0.15) !important; }
+aside#sidebar.sidebar-glass .sidebar-button { 
+    color: #e5e7eb; 
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+aside#sidebar.sidebar-glass .sidebar-button i { color: #e5e7eb; }
+aside#sidebar.sidebar-glass .sidebar-button:hover { background: rgba(255,255,255,0.08); }
+aside#sidebar.sidebar-glass .sidebar-button span.label { opacity: 1 !important; transform: none !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 150px; }
+
+/* Prevent icon+label layout from pushing out of the sidebar */
+aside#sidebar .sidebar-button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+aside#sidebar .sidebar-button img,
+aside#sidebar .sidebar-button i,
+aside#sidebar .sidebar-button svg { flex: 0 0 auto; width: 20px; height: 20px; }
+aside#sidebar .sidebar-button .label { flex: 1 1 auto; min-width: 0; }
+
+/* Sidebar collapse (menu-collapsed class toggled by JS) */
+aside#sidebar.menu-collapsed { width: 64px; }
+aside#sidebar.menu-collapsed .sidebar-button .label { display: none; }
+aside#sidebar.menu-collapsed .menu-hint { display: block; color: #e5e7eb; opacity: .7; padding: 8px 12px; font-size: 12px; }
+
+/* Smooth slide/parallax behavior */
+aside#sidebar { 
+  transition: transform .6s cubic-bezier(.22,.61,.36,1); 
+  will-change: transform; 
+  position: relative;
+}
+
+/* Keep the menu button permanently visible */
+aside#sidebar .sidebar-header { position: static; width: 100%; height: auto; display: flex; align-items: center; justify-content: flex-start; background: transparent; border-right: none; padding: 0; }
+
+/* Slide only the sidebar content, not the header */
+aside#sidebar .sidebar-content {
+  transition: transform .6s cubic-bezier(.22,.61,.36,1);
+  will-change: transform;
+  margin-left: 60px;
+  overflow: hidden;
+}
+
+/* Use menu-collapsed class for content sliding */
+aside#sidebar.menu-collapsed .sidebar-content { 
+  transform: translateX(-100%); 
+}
+
+.parallax-shift { 
+  transition: transform .6s cubic-bezier(.22,.61,.36,1); 
+  will-change: transform; 
+  transform: translateX(18px); 
+}
+
+/* Default plain white sidebar (used where glass isn't applied) */
+aside#sidebar:not(.sidebar-glass) {
+    background: #ffffff;
+    color: #111827;
+}
+aside#sidebar:not(.sidebar-glass) .sidebar-button:hover { background: rgba(17,24,39,0.06); }
+
+/* =======================
+   Main Content
+======================= */
+main {
+    padding: 30px;
+}
+
+/* Dashboard title */
+#dashboard-content h2 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #1e3a8a, #3b82f6);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+/* Cards */
+.card, .card-3d, .glass {
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(17, 24, 39, 0.08);
+}
+.card:hover { transform: translateY(-4px); transition: transform .2s ease; }
+
+/* Tables - unify look across admin/teacher pages */
+.table-wrapper { overflow: auto; -webkit-overflow-scrolling: touch; }
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6b7280;
+    z-index: 1;
+}
+.table tbody tr:hover { background: #f9fafb; }
+.table th, .table td { padding: 10px 12px; }
+
+/* Transparent table for dark backgrounds */
+.table-glass {
+    background: rgba(255,255,255,0.08) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.table-glass thead th {
+    background: rgba(255,255,255,0.1) !important;
+    color: #e5e7eb !important;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.table-glass tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.table-glass tbody tr:hover {
+    background: rgba(255,255,255,0.05) !important;
+}
+.table-glass td {
+    color: #d1d5db !important;
+    padding: 10px 12px;
+}
+.table-glass th {
+    color: #e5e7eb !important;
+    padding: 10px 12px;
+}
+
+/* Scrollbar aesthetics for data-heavy tables */
+.table-wrapper::-webkit-scrollbar { height: 10px; width: 10px; }
+.table-wrapper::-webkit-scrollbar-thumb { background: rgba(100,116,139,.35); border-radius: 999px; }
+.table-wrapper::-webkit-scrollbar-track { background: rgba(203,213,225,.35); }
+
+/* Modals (teacher page) */
+#student-modal { backdrop-filter: blur(2px); }
+#student-modal #student-modal-content { border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+
+/* =======================
+   Student Info - Timeline Style
+======================= */
+#student-info {
+    margin-top: 25px;
+    position: relative;
+    padding-left: 25px;
+    border-left: 3px dashed #3b82f6;
+}
+
+#student-info .info-item {
+    margin-bottom: 18px;
+    position: relative;
+    padding-left: 40px;
+}
+
+#student-info .info-item::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    background: #3b82f6;
+    border-radius: 50%;
+    position: absolute;
+    left: -28px;
+    top: 4px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+#student-info .info-item i {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 18px;
+    color: #1e3a8a;
+    background: rgba(59, 130, 246, 0.1);
+    padding: 6px;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+#student-info .info-item span {
+    font-size: 15px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* =======================
+   Profile Section
+======================= */
+#view-student-content h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: #1e3a8a;
+}
+
+/* =======================
+   Animations
+======================= */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeIn .4s ease both; }
+
+/* =======================
+   Utility helpers for icons/labels
+======================= */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-green { background: #dcfce7; color: #166534; }
+.badge-yellow { background: #fef9c3; color: #854d0e; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) rgba(229, 231, 235, 0.2);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(229, 231, 235, 0.2);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+  
+/* =======================
+   Responsive
+======================= */
+@media screen and (max-width: 1024px) {
+    main { padding: 24px; }
+    #dashboard-content h2 { font-size: 24px; }
+}
+
+@media screen and (max-width: 768px) {
+    main { padding: 20px; }
+    /* Use Tailwind translate classes for off-canvas; just reduce width when collapsed */
+    aside#sidebar.menu-collapsed { width: 64px !important; }
+    aside#sidebar.menu-collapsed .label { display: none; }
+    .table th, .table td { padding: 8px 10px; }
+}
+
+@media screen and (max-width: 480px) {
+    main { padding: 16px; }
+    #dashboard-content h2 { font-size: 20px; }
+    .btn { width: 100%; }
+}
+
+/* =======================
+   Sidebar Parallax (dynamic)
+   Applies to admin and teacher sidebars
+======================= */
+.sidebar-parallax {
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar-parallax .parallax-bg {
+    position: absolute;
+    inset: -20%;
+    z-index: -1;
+    background: radial-gradient(600px 300px at 20% 10%, rgba(99,102,241,0.18), transparent 40%),
+                radial-gradient(500px 250px at 80% 20%, rgba(34,197,94,0.18), transparent 35%),
+                linear-gradient(180deg, rgba(15,23,42,0.6), rgba(17,24,39,0.6));
+    transform: translateY(0);
+    will-change: transform;
+    pointer-events: none;
+}
+
+/* Center the sidebar vertically on the left with parallax slide */
+#sidebar.sidebar-parallax {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 256px;
+    border-radius: 0;
+    z-index: 100;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.20);
+    transform: translateX(-100%);
+    transition: transform .4s cubic-bezier(.22,.61,.36,1);
+    background: linear-gradient(180deg, rgba(30,58,138,0.95), rgba(59,130,246,0.95), rgba(34,197,94,0.95));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+#sidebar.sidebar-parallax.open {
+    transform: translateX(0);
+}
+@media (min-width: 768px) {
+    #sidebar.sidebar-parallax {
+        position: relative;
+        transform: none !important;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 256px;
+        border-radius: 0;
+    }
+}
+
+/* Enhanced sidebar slide animation with background overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#main-wrapper {
+  padding-left: 0 !important;
+}
+@media (min-width: 768px) {
+  #main-wrapper {
+    padding-left: 0 !important;
+  }
+}
+
+aside#sidebar .sidebar-content {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}

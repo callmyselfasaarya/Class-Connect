@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  .sidebar-button span.label { white-space: nowrap; }
+  .bg-animated {
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(59,130,246,.15), transparent 40%),
+                radial-gradient(1000px 500px at 90% 20%, rgba(99,102,241,.12), transparent 35%),
+                radial-gradient(900px 500px at 30% 90%, rgba(34,197,94,.12), transparent 40%),
+                linear-gradient(135deg, #0f172a, #111827 45%, #0b1220);
+    animation: floatBg 18s ease-in-out infinite alternate;
+    min-height: 100vh;
+  }
+  @keyframes floatBg { to { background-position: 5% 0, 95% 25%, 35% 95%, 100% 100%; } }
+  .glass {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  .sidebar-glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .table-glass {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .table-glass th {
+    background: rgba(255,255,255,0.1);
+    color: #e5e7eb;
+  }
+  .table-glass td {
+    color: #d1d5db;
+    border-color: rgba(255,255,255,0.1);
+  }
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 25;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    pointer-events: none;
+  }
+  .sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar-button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: #d1d5db;
+    transition: background-color 0.2s, color 0.2s;
+  }
+  .sidebar-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+  .sidebar-button i {
+    width: 1.25rem;
+    margin-right: 0.75rem;
+    text-align: center;
+  }
+  
+  /* Mobile-specific improvements */
+  @media (max-width: 768px) {
+    .sidebar-glass {
+      width: 280px;
+      transform: translateX(-100%);
+    }
+    .sidebar-glass.open {
+      transform: translateX(0);
+    }
+    .main-content {
+      padding: 1rem;
+    }
+    .glass {
+      margin: 0.5rem 0;
+    }
+    .grid {
+      gap: 1rem;
+    }
+    .text-4xl {
+      font-size: 2rem;
+    }
+    .text-2xl {
+      font-size: 1.5rem;
+    }
+    .p-6 {
+      padding: 1rem;
+    }
+    .px-6 {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .py-4 {
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+    .space-y-6 > * + * {
+      margin-top: 1rem;
+    }
+    .space-y-3 > * + * {
+      margin-top: 0.75rem;
+    }
+    .space-y-2 > * + * {
+      margin-top: 0.5rem;
+    }
+    #sidebar-toggle {
+      display: block;
+    }
+  }
+  
+  @media (min-width: 769px) {
+    #sidebar-toggle {
+      display: none;
+    }
+    .sidebar-glass {
+      transform: translateX(0);
+    }
+  }
+</style>
+</head>
+<body class="bg-[#2a104f] font-sans">
+
+<div id="vanta-bg" class="fixed top-0 left-0 w-full h-full z-0"></div>
+
+<button id="sidebar-toggle" class="fixed top-4 left-4 z-50 md:hidden bg-pink-600 text-white p-2 rounded shadow">
+  <i class="fas fa-bars"></i>
+</button>
+
+<div class="flex h-screen relative z-10">
+  <!-- Sidebar Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  
+  <aside id="sidebar" class="sidebar-glass sidebar-parallax w-64 h-screen fixed left-0 top-0 transform -translate-x-full md:translate-x-0 md:relative transition-transform duration-300 z-30 text-white">
+    <!-- Sidebar content here -->
+    <div class="sidebar-header px-6 py-4 font-bold text-lg">
+      <div class="flex items-center justify-between">
+        <button id="sidebar-menu-toggle" class="p-2 rounded hover:bg-white/10" title="Toggle menu">
+          <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14v2H3V5zm0 4h14v2H3V9zm0 4h14v2H3v-2z" clip-rule="evenodd"/></svg>
+        </button>
+        <span class="ml-4">Student</span>
+      </div>
+    </div>
+    <nav class="sidebar-content px-2">
+      <button class="sidebar-button" data-page="dashboard"><i class="fas fa-home"></i><span class="label">Dashboard</span></button>
+      <button class="sidebar-button" data-page="profile"><i class="fas fa-user-graduate"></i><span class="label">My Profile</span></button>
+      <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Courses</span></button>
+      <button class="sidebar-button" data-page="outpass"><i class="fas fa-ticket"></i><span class="label">Out Pass</span></button>
+      <button class="sidebar-button mt-8 w-full flex items-center justify-start text-red-500" id="logout-btn">
+        <i class="fas fa-sign-out-alt mr-2"></i>
+        <span class="label">Logout</span>
+      </button>
+    </nav>
+  </aside>
+  <div id="main-wrapper" class="flex-1 flex flex-col overflow-hidden md:ml-10 transition-all duration-300">
+    <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+<script>
+    VANTA.NET({
+        el: "#vanta-bg",
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        scaleMobile: 1.00,
+        color: 0xec4899,
+        backgroundColor: 0x2a104f,
+        points: 10.00,
+        maxDistance: 25.00,
+        spacing: 18.00
+    });
+  document.addEventListener('DOMContentLoaded', () => {
+    // Sidebar toggle for mobile
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (toggleBtn && sidebar) {
+      toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        if (overlay) overlay.classList.toggle('active');
+      });
+      
+      // Close sidebar when clicking overlay
+      if (overlay) {
+        overlay.addEventListener('click', () => {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('active');
+        });
+      }
+      
+      document.addEventListener('click', (e) => {
+        if (window.innerWidth < 768) {
+          if (!sidebar.contains(e.target) && e.target !== toggleBtn) {
+            sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('active');
+          }
+        }
+      });
+      
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        if (window.innerWidth >= 768) {
+          sidebar.classList.remove('open');
+          if (overlay) overlay.classList.remove('active');
+        }
+      });
+    }
+    
+    // Menu button toggle (collapse/expand sidebar content)
+    const menuToggle = document.getElementById('sidebar-menu-toggle');
+    if (menuToggle && sidebar) {
+      menuToggle.addEventListener('click', ()=>{
+        const isCollapsed = sidebar.classList.contains('menu-collapsed');
+        if (isCollapsed) {
+          sidebar.classList.remove('menu-collapsed');
+        } else {
+          sidebar.classList.add('menu-collapsed');
+        }
+      });
+    }
+
+    // Sidebar navigation
+    document.querySelectorAll('.sidebar-button[data-page]').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const page = this.getAttribute('data-page');
+        handleNavigation(page);
+        // Close sidebar on mobile after navigation
+        if (window.innerWidth < 768) sidebar.classList.remove('open');
+      });
+    });
+
+    // Logout button
+    document.getElementById('logout-btn').addEventListener('click', function() {
+      window.location.href = '/logout';
+    });
+  });
+
+  // Navigation handler
+  function handleNavigation(page) {
+    switch (page) {
+      case "dashboard":
+        showDashboard();
+        break;
+      case "profile":
+        showViewStudent();
+        break;
+      case "courses":
+        showCourses();
+        break;
+      case "outpass":
+        showOutPass();
+        break;
+      default:
+        showDashboard();
+    }
+  }
+
+  function showDashboard() {
+    document.getElementById('main-content').innerHTML = `
+      <div id="dashboard-content" class="space-y-6">
+        <!-- Welcome Section -->
+        <div class="glass rounded-lg p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white">Welcome to Student Dashboard</h2>
+              <div id="student-info" class="mt-4 pl-6 border-l-2 border-blue-400 space-y-4">
+                <div class="animate-pulse">
+                  <div class="h-4 bg-gray-300 rounded w-1/3 mb-2"></div>
+                  <div class="h-4 bg-gray-300 rounded w-1/4"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Attendance Summary -->
+          <div class="glass rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+              <i class="fas fa-chart-line mr-2 text-blue-400"></i>
+              Attendance Summary
+            </h3>
+            <div id="attendance-summary" class="text-center">
+              <div class="animate-pulse">
+                <div class="h-8 bg-gray-300 rounded w-1/4 mx-auto mb-2"></div>
+                <div class="h-4 bg-gray-300 rounded w-1/2 mx-auto"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="glass rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+              <i class="fas fa-bolt mr-2 text-yellow-400"></i>
+              Quick Actions
+            </h3>
+            <div class="space-y-3">
+              <button onclick="showCourses()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <i class="fas fa-book mr-2"></i>View Courses
+              </button>
+              <button onclick="showViewStudent()" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <i class="fas fa-user mr-2"></i>My Profile
+              </button>
+          <button onclick="showOutPass()" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
+            <i class="fas fa-ticket mr-2"></i>Request Out Pass
+          </button>
+            </div>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="glass rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+              <i class="fas fa-clock mr-2 text-purple-400"></i>
+              Recent Activity
+            </h3>
+            <div class="space-y-2 text-sm text-white/70">
+              <div class="flex items-center">
+                <i class="fas fa-circle text-green-400 text-xs mr-2"></i>
+                Last login: Today
+              </div>
+              <div class="flex items-center">
+                <i class="fas fa-circle text-blue-400 text-xs mr-2"></i>
+                Profile updated: Recently
+              </div>
+              <div class="flex items-center">
+                <i class="fas fa-circle text-yellow-400 text-xs mr-2"></i>
+                Courses accessed: 6
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    loadAttendanceSummary();
+  }
+
+  function showViewStudent() {
+    document.getElementById('main-content').innerHTML = `
+      <div id="view-student-content" class="glass rounded-lg p-6">
+        <h2 class="text-lg font-bold text-white mb-4">My Profile</h2>
+        <div id="student-details" class="text-white/80">
+          <div class="animate-pulse space-y-3">
+            <div class="h-6 bg-gray-300 rounded w-1/3"></div>
+            <div class="h-6 bg-gray-300 rounded w-1/2"></div>
+            <div class="h-6 bg-gray-300 rounded w-1/4"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    loadStudentDetails();
+  }
+
+  function showCourses() {
+    document.getElementById('main-content').innerHTML = `
+      <div id="courses-content" class="glass rounded-lg p-6">
+        <h2 class="text-lg font-bold text-white">My Course List</h2>
+        <div id="courses-loading" class="text-sm text-white/70 mt-2">Loading courses...</div>
+        <ul class="list-disc pl-6 text-white space-y-2 mt-4" id="course-list"></ul>
+        <div id="courses-empty" class="text-white/70 mt-2 hidden">No courses found.</div>
+      </div>
+    `;
+    loadCourses();
+  }
+
+  function showOutPass(){
+    document.getElementById('main-content').innerHTML = `
+      <div class="glass rounded-lg p-6 max-w-3xl mx-auto">
+        <h2 class="text-lg font-bold text-white mb-4">Request Out Pass</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-white/80">Type</label>
+            <select id="op-type" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
+              <option value="out_pass">Out Pass</option>
+              <option value="od_pass">OD Pass</option>
+              <option value="emergency">Emergency</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-sm text-white/80">Reason</label>
+            <input id="op-reason" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="Reason" />
+          </div>
+          <div id="fromto-group">
+            <label class="text-sm text-white/80">From/To (optional)</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input id="op-from" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+              <input id="op-to" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+            </div>
+          </div>
+          <div id="od-extra" class="col-span-1 md:col-span-2 hidden grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="text-sm text-white/80">OD Duration</label>
+              <select id="od-duration" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
+                <option value="half_day">Half Day</option>
+                <option value="full_day">Full Day</option>
+                <option value="n_days">N Days</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-sm text-white/80">No. of days (if N Days)</label>
+              <input id="od-days" type="number" min="1" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="e.g. 2" />
+            </div>
+          </div>
+          <div id="other-extra" class="hidden">
+            <label class="text-sm text-white/80">Hours/Time</label>
+            <input id="other-hours" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="e.g. 3 hours" />
+          </div>
+        </div>
+        <button id="op-submit" class="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded">Submit</button>
+        <div id="op-msg" class="text-sm mt-2"></div>
+        <hr class="my-6 border-white/10" />
+        <h3 class="text-white font-semibold mb-2">My Requests</h3>
+        <div id="op-list" class="text-white/80 text-sm"></div>
+      </div>`;
+    setTimeout(initOutPass, 0);
+  }
+
+  async function initOutPass(){
+    const msg = document.getElementById('op-msg');
+    const btn = document.getElementById('op-submit');
+    const list = document.getElementById('op-list');
+    const typeSel = document.getElementById('op-type');
+    const odExtra = document.getElementById('od-extra');
+    const otherExtra = document.getElementById('other-extra');
+    const fromToGroup = document.getElementById('fromto-group');
+    const odDurSel = document.getElementById('od-duration');
+    const odDays = document.getElementById('od-days');
+    const otherHours = document.getElementById('other-hours');
+
+    // Toggle extra fields by type
+    if (typeSel){
+      const updateExtras = () => {
+        const t = typeSel.value;
+        odExtra.classList.add('hidden');
+        otherExtra.classList.add('hidden');
+        if (t === 'out_pass') { fromToGroup.classList.add('hidden'); }
+        if (t === 'emergency') { fromToGroup.classList.add('hidden'); }
+        if (t === 'od_pass') { odExtra.classList.remove('hidden'); fromToGroup.classList.add('hidden'); }
+        if (t === 'other') { otherExtra.classList.remove('hidden'); fromToGroup.classList.add('hidden'); }
+      };
+      typeSel.onchange = updateExtras;
+      updateExtras();
+    }
+    // Click-to-view modal for approved pass
+    const showPassModal = (p) => {
+      const html = `
+        <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" id="op-modal">
+          <div class="glass rounded-xl p-6 w-full max-w-lg relative">
+            <button class="absolute top-3 right-3 text-white/80" onclick="document.getElementById('op-modal').remove()">✕</button>
+            <h3 class="text-xl font-semibold text-white mb-4">Approved Out Pass</h3>
+            <div class="space-y-2 text-white/90">
+              <div><span class="text-white/70">Name:</span> ${p.requester_name||''}</div>
+              <div><span class="text-white/70">Roll No:</span> ${p.rollno||''}</div>
+              <div><span class="text-white/70">Department:</span> ${p.department||''}</div>
+              <div><span class="text-white/70">Type:</span> ${p.pass_type||''}</div>
+              <div><span class="text-white/70">From:</span> ${p.from_datetime||''}</div>
+              <div><span class="text-white/70">To:</span> ${p.to_datetime||''}</div>
+              <div><span class="text-white/70">Advisor:</span> ${p.advisor_status||'-'} ${p.advisor_remarks? '('+p.advisor_remarks+')':''}</div>
+              <div><span class="text-white/70">HOD:</span> ${p.hod_status||'-'} ${p.hod_remarks? '('+p.hod_remarks+')':''}</div>
+              <div><span class="text-white/70">Final Status:</span> ${p.status||''}</div>
+            </div>
+          </div>
+        </div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+    };
+    const refreshList = async () => {
+      try{
+        const res = await fetch('/out_pass/my');
+        const data = await res.json();
+        const rows = (data && data.success && Array.isArray(data.passes)) ? data.passes : [];
+        list.innerHTML = rows.length ? `
+          <div class="overflow-x-auto">
+            <table class="min-w-full table-glass">
+              <thead><tr>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">From</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">To</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Advisor</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">HOD</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Final</th>
+              </tr></thead>
+              <tbody>
+                ${rows.map((p,i)=>{
+                  const approved = (p.status||'').toLowerCase()==='approved';
+                  const clickable = approved ? 'cursor-pointer hover:bg-white/10' : '';
+                  return `<tr class="border-b border-white/10 ${clickable}" data-index="${i}">
+                    <td class="px-3 py-2">${p.pass_type}</td>
+                    <td class="px-3 py-2">${p.from_datetime}</td>
+                    <td class="px-3 py-2">${p.to_datetime}</td>
+                    <td class="px-3 py-2">${p.advisor_status||'-'}</td>
+                    <td class="px-3 py-2">${p.hod_status||'-'}</td>
+                    <td class="px-3 py-2">${p.status||'-'}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>` : '<div class="text-white/60">No requests yet.</div>';
+
+        // Bind click handlers for approved rows using the in-memory rows
+        const tbody = list.querySelector('tbody');
+        if (tbody){
+          tbody.querySelectorAll('tr[data-index]').forEach(tr => {
+            const idx = Number(tr.getAttribute('data-index'));
+            const p = rows[idx];
+            if ((p.status||'').toLowerCase()==='approved'){
+              tr.addEventListener('click', () => showPassModal(p));
+            }
+          });
+        }
+      }catch(e){ list.innerHTML = '<div class="text-red-300">Error loading requests.</div>'; }
+    };
+    if (btn){ btn.onclick = async () => {
+      const type = document.getElementById('op-type').value;
+      const reason = document.getElementById('op-reason').value.trim();
+      const fromD = document.getElementById('op-from').value;
+      const toD = document.getElementById('op-to').value;
+      msg.textContent = '';
+      try{
+        const payload = { pass_type:type, reason, from_datetime:fromD, to_datetime:toD };
+        if (type==='od_pass') { payload.od_duration = odDurSel.value; payload.od_days = Number(odDays.value||0); }
+        if (type==='other') { payload.other_hours = (otherHours.value||'').trim(); }
+        const res = await fetch('/out_pass', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success){ msg.textContent = 'Submitted successfully'; msg.className = 'text-green-300 text-sm mt-2'; await refreshList(); }
+        else { msg.textContent = data.message || 'Failed'; msg.className = 'text-red-300 text-sm mt-2'; }
+      }catch(e){ msg.textContent = 'Error submitting'; msg.className = 'text-red-300 text-sm mt-2'; }
+    } }
+    refreshList();
+  }
+
+  async function loadCourses(){
+    const ul = document.getElementById('course-list');
+    const loading = document.getElementById('courses-loading');
+    const empty = document.getElementById('courses-empty');
+    if (!ul) return;
+    try{
+      const res = await fetch('/courses');
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0){
+        if (empty) empty.classList.remove('hidden');
+        ul.innerHTML = '';
+        return;
+      }
+      ul.innerHTML = data.map(c => `
+        <li>
+          <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
+          <span class="text-sm text-white/60 ml-2">${c.course_code || ''}</span>
+        </li>
+      `).join('');
+    } catch(e){
+      ul.innerHTML = '<li class="text-red-300">Error loading courses.</li>';
+    } finally {
+      if (loading) loading.classList.add('hidden');
+    }
+  }
+
+  async function loadAttendanceSummary(retry = 0) {
+    try {
+      const res = await fetch('/student_attendance_average', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error("Server error");
+      const data = await res.json();
+      const summaryDiv = document.getElementById('attendance-summary');
+      if (data.success) {
+        const percentage = data.attendance_average;
+        const presentDays = data.present_days;
+        const totalDays = data.total_days;
+        let colorClass = 'text-red-600';
+        let bgColorClass = 'bg-red-100';
+        let statusText = 'Needs Improvement';
+        if (percentage >= 90) { colorClass = 'text-green-600'; bgColorClass = 'bg-green-100'; statusText = 'Excellent'; }
+        else if (percentage >= 75) { colorClass = 'text-blue-600'; bgColorClass = 'bg-blue-100'; statusText = 'Good'; }
+        else if (percentage >= 60) { colorClass = 'text-yellow-600'; bgColorClass = 'bg-yellow-100'; statusText = 'Fair'; }
+        summaryDiv.innerHTML = `
+          <div class="mb-4">
+            <div class="text-4xl font-bold ${colorClass} mb-2">${percentage}%</div>
+            <div class="text-sm text-gray-600">Attendance Average</div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div class="${bgColorClass} rounded-lg p-3">
+              <div class="font-semibold ${colorClass}">${presentDays}</div>
+              <div class="text-gray-600">Present Days</div>
+            </div>
+            <div class="bg-gray-100 rounded-lg p-3">
+              <div class="font-semibold text-gray-700">${totalDays}</div>
+              <div class="text-gray-600">Total Days</div>
+            </div>
+          </div>
+          <div class="mt-4">
+            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${bgColorClass} ${colorClass}">
+              ${statusText}
+            </span>
+          </div>
+        `;
+      } else {
+        summaryDiv.innerHTML = `<div class="text-center text-gray-500"><div class="text-2xl mb-2">📊</div><div>No attendance records found</div></div>`;
+      }
+    } catch (error) {
+      if (retry < 3) { setTimeout(() => loadAttendanceSummary(retry + 1), 1000); }
+      else { document.getElementById('attendance-summary').innerHTML = `<div class="text-center text-red-500"><div class="text-2xl mb-2">⚠️</div><div>Error loading attendance data</div></div>`; }
+    }
+  }
+
+  async function loadStudentInfo(retry = 0) {
+    try {
+      const res = await fetch('/current_student_info', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error("Server error");
+      const data = await res.json();
+      const infoDiv = document.getElementById('student-info');
+      const nameDisplay = document.getElementById('student-name-display');
+      if (data.success) {
+        const student = data.student;
+        
+        // Update header with student name
+        if (nameDisplay) {
+          nameDisplay.textContent = `Welcome, ${student.name}`;
+        }
+        
+        infoDiv.innerHTML = `
+          <div class="relative pl-8">
+            <i class="fas fa-user absolute left-[-28px] top-0 text-blue-600 bg-blue-100 p-2 rounded-full shadow"></i>
+            <span class="font-semibold text-gray-800">${student.name}</span>
+          </div>
+          <div class="relative pl-8">
+            <i class="fas fa-id-card absolute left-[-28px] top-0 text-blue-600 bg-blue-100 p-2 rounded-full shadow"></i>
+            <span class="text-gray-600">Roll No: ${student.rollno}</span>
+          </div>
+          <div class="relative pl-8">
+            <i class="fas fa-chalkboard absolute left-[-28px] top-0 text-blue-600 bg-blue-100 p-2 rounded-full shadow"></i>
+            <span class="text-gray-600">Department: ${student.current_semester || 'N/A'}</span>
+          </div>
+        `;
+      } else {
+        infoDiv.innerHTML = `<div class="text-sm text-red-500">Error loading student information</div>`;
+        if (nameDisplay) {
+          nameDisplay.textContent = 'Error loading info';
+        }
+      }
+    } catch (error) {
+      if (retry < 3) { setTimeout(() => loadStudentInfo(retry + 1), 1000); }
+      else { 
+        document.getElementById('student-info').innerHTML = `<div class="text-sm text-red-500">Error loading student information</div>`;
+        const nameDisplay = document.getElementById('student-name-display');
+        if (nameDisplay) {
+          nameDisplay.textContent = 'Error loading info';
+        }
+      }
+    }
+  }
+
+  async function loadStudentDetails() {
+    try {
+      const student = await fetch('/student_details', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } }).then(r => r.json());
+      if (student.error) { alert(student.error); return; }
+
+      const getInitials = (name) => {
+        if (!name) return 'ST';
+        return name.split(' ').filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+      };
+
+      const infoItems = [
+        ["reg_no", "Reg No", "fa-id-card"],
+        ["rollno", "Roll No", "fa-hashtag"],
+        ["dob", "DOB", "fa-cake-candles"],
+        ["gender", "Gender", "fa-venus-mars"],
+        ["aadhar", "Aadhar", "fa-fingerprint"],
+        ["student_mobile", "Student Mobile", "fa-phone"],
+        ["blood_group", "Blood Group", "fa-droplet"],
+        ["parent_name", "Parent Name", "fa-user"],
+        ["parent_mobile", "Parent Mobile", "fa-phone"],
+        ["email", "Email", "fa-envelope"],
+        ["address", "Address", "fa-location-dot"],
+        ["nationality", "Nationality", "fa-flag"],
+        ["religion", "Religion", "fa-place-of-worship"],
+        ["community", "Community", "fa-people-group"],
+        ["caste", "Caste", "fa-users"],
+        ["day_scholar_or_hosteller", "Dayscholar/Hosteller", "fa-house"],
+        ["current_semester", "Department", "fa-school"],
+        ["seat_type", "Seat Type", "fa-chair"],
+        ["quota_type", "Quota Type", "fa-ticket"],
+        ["pmss", "PMSS", "fa-check-circle"],
+        ["remarks", "Remarks", "fa-note-sticky"],
+        ["bus_no", "Bus No", "fa-bus"],
+        ["hosteller_room_no", "Room No", "fa-bed"],
+        ["outside_staying_address", "Outside Staying Address", "fa-map-location-dot"],
+        ["owner_ph_no", "Owner Phone No", "fa-phone"],
+      ];
+
+      const headerHTML = `
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 text-white shadow">
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">${getInitials(student.name)}</div>
+            <div class="flex-1">
+              <div class="text-2xl font-bold">${student.name || '-'}</div>
+              <div class="text-sm text-white/90 mt-1 flex flex-wrap gap-3">
+                <span class="inline-flex items-center gap-1"><i class="fas fa-id-badge"></i> <span>Roll: ${student.rollno || '-'}</span></span>
+                <span class="inline-flex items-center gap-1"><i class="fas fa-chalkboard"></i> <span>Department: ${student.current_semester || '-'}</span></span>
+              </div>
+            </div>
+            <img src="static/images/logo.png" alt="Logo" class="w-20 h-auto hidden sm:block"/>
+          </div>
+        </div>`;
+
+      const gridHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          ${infoItems.map(([key,label,icon])=>{
+            const value = student[key] || '-';
+            return `
+              <div class="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow transition">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas ${icon}"></i></div>
+                  <div>
+                    <div class="text-xs uppercase tracking-wider text-gray-500">${label}</div>
+                    <div class="text-gray-800 font-medium mt-0.5 break-words">${value}</div>
+                  </div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+
+      document.getElementById('student-details').innerHTML = headerHTML + gridHTML;
+    } catch (err) {
+      alert('Error loading student details');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    showDashboard();
+    setTimeout(() => {
+      loadStudentInfo();
+      loadAttendanceSummary();
+    }, 500);
+  });
+</script>
+
+</body>
+</html>

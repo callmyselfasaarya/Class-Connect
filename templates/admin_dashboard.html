@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Class_Connect</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+  body { font-family: 'Inter', sans-serif; }
+  .bg-animated {
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(59,130,246,.15), transparent 40%),
+                radial-gradient(1000px 500px at 90% 20%, rgba(99,102,241,.12), transparent 35%),
+                radial-gradient(900px 500px at 30% 90%, rgba(34,197,94,.12), transparent 40%),
+                linear-gradient(135deg, #0f172a, #111827 45%, #0b1220);
+    animation: floatBg 18s ease-in-out infinite alternate;
+    min-height: 100vh;
+  }
+  @keyframes floatBg { to { background-position: 5% 0, 95% 25%, 35% 95%, 100% 100%; } }
+  .glass { background: rgba(255,255,255,0.08); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .card-3d { transition: transform .15s ease, box-shadow .2s ease; will-change: transform; }
+  .card-3d:hover { transform: translateY(-6px) scale(1.02) rotateX(3deg) rotateY(-3deg); box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .submenu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .submenu.open { max-height: 500px; }
+  .card-3d-border { border: 3px solid; border-image: linear-gradient(120deg, #7f5af0 0%, #00f2fe 100%); border-image-slice: 1; }
+  .neon { color: #fff; text-shadow: 0 0 8px #7f5af0, 0 0 16px #7f5af0, 0 0 2px #fff; letter-spacing: 1px; }
+  .sidebar-glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .table-glass {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .table-glass th {
+    background: rgba(255,255,255,0.1);
+    color: #e5e7eb;
+  }
+  .table-glass td {
+    color: #d1d5db;
+    border-color: rgba(255,255,255,0.1);
+  }
+  
+  /* Custom scrollbar styles */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) rgba(229, 231, 235, 0.2);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(229, 231, 235, 0.2);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+  
+  /* Missing CSS classes for attendance table */
+  .text-on-dark {
+    color: #e5e7eb;
+  }
+  
+  .muted-on-dark {
+    color: #9ca3af;
+  }
+  
+  .glass-dark {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    border-radius: 12px;
+  }
+  
+  .neon-border {
+    border: 2px solid;
+    border-image: linear-gradient(120deg, #7f5af0 0%, #00f2fe 100%);
+    border-image-slice: 1;
+  }
+  
+  /* Mobile-specific improvements */
+  @media (max-width: 768px) {
+    .sidebar-glass {
+      width: 280px;
+      transform: translateX(-100%);
+    }
+    .sidebar-glass.open {
+      transform: translateX(0);
+    }
+    .main-content {
+      padding: 1rem;
+    }
+    .glass {
+      margin: 0.5rem 0;
+    }
+    .grid {
+      gap: 1rem;
+    }
+    .text-4xl {
+      font-size: 2rem;
+    }
+    .text-2xl {
+      font-size: 1.5rem;
+    }
+    .p-6 {
+      padding: 1rem;
+    }
+    .px-6 {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .py-4 {
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+    #sidebar-toggle {
+      display: block;
+    }
+  }
+  
+  @media (min-width: 769px) {
+    #sidebar-toggle {
+      display: none;
+    }
+    .sidebar-glass {
+      transform: translateX(0);
+    }
+  }
+</style>
+</head>
+<body class="bg-[#2a104f] min-h-screen relative overflow-hidden">
+<!-- Vanta.js Background -->
+<div id="vanta-bg" class="fixed top-0 left-0 w-full h-full z-0"></div>
+
+<!-- Decorative floating elements -->
+<div class="absolute inset-0 overflow-hidden pointer-events-none">
+  <div class="absolute top-20 left-10 w-20 h-20 bg-white bg-opacity-10 rounded-full blur-xl"></div>
+  <div class="absolute top-40 right-20 w-32 h-32 bg-white bg-opacity-5 rounded-full blur-2xl"></div>
+  <div class="absolute bottom-20 left-1/4 w-24 h-24 bg-white bg-opacity-15 rounded-full blur-lg"></div>
+  <div class="absolute bottom-40 right-1/3 w-16 h-16 bg-white bg-opacity-20 rounded-full blur-md"></div>
+</div>
+<button id="sidebar-toggle" class="fixed top-4 left-4 z-50 md:hidden bg-pink-600 text-white p-2 rounded shadow">
+  <i class="fas fa-bars"></i>
+</button>
+
+<div class="flex h-screen relative z-10">
+  <!-- Sidebar Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  
+  <aside id="sidebar" class="sidebar-glass sidebar-parallax w-64 h-screen fixed left-0 top-0 transform -translate-x-full md:translate-x-0 md:relative transition-transform duration-300 z-30 text-white">
+    <!-- Sidebar content here -->
+    <div class="sidebar-header px-6 py-4 font-bold text-lg">
+      <div class="flex items-center justify-between">
+        <button id="sidebar-menu-toggle" class="p-2 rounded hover:bg-white/10" title="Toggle menu">
+          <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14v2H3V5zm0 4h14v2H3V9zm0 4h14v2H3v-2z" clip-rule="evenodd"/></svg>
+        </button>
+        <span class="ml-4">Admin</span>
+      </div>
+    </div>
+    <nav class="sidebar-content px-2">
+      <button class="sidebar-button" data-page="dashboard"><i class="fas fa-home"></i><span class="label">Dashboard</span></button>
+      <button class="sidebar-button" data-page="students"><i class="fas fa-users"></i><span class="label">All Students</span></button>
+      <button class="sidebar-button" data-page="teachers"><i class="fas fa-chalkboard-teacher"></i><span class="label">All Teachers</span></button>
+      <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Course List</span></button>
+      <button class="sidebar-button" data-page="attendance"><i class="fas fa-chart-line"></i><span class="label">Attendance</span></button>
+      <button class="sidebar-button mt-8 w-full flex items-center justify-start text-red-500" id="logout-btn">
+        <i class="fas fa-sign-out-alt mr-2"></i>
+        <span class="label">Logout</span>
+      </button>
+    </nav>
+  </aside>
+  <div id="main-wrapper" class="flex-1 flex flex-col overflow-hidden md:ml-10 transition-all duration-300">
+    <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+<script>
+    VANTA.NET({
+        el: "#vanta-bg",
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        scaleMobile: 1.00,
+        color: 0xec4899,
+        backgroundColor: 0x2a104f,
+        points: 10.00,
+        maxDistance: 25.00,
+        spacing: 18.00
+    })
+    // --- Dashboard card updaters ---
+async function fetchCounts(){
+  try{
+    const students = await fetch('/students').then(r=>r.json());
+    const teachers = await fetch('/teachers').then(r=>r.json());
+    document.getElementById('total-students').textContent = students.length;
+    document.getElementById('total-teachers').textContent = teachers.length;
+  }catch(e){console.error(e);}
+}
+
+// --- Daily Absent Students Card ---
+async function updateAbsentStudentsCard() {
+  const absentList = document.getElementById('absent-list');
+  const absentCount = document.getElementById('absent-count');
+  if (absentList) absentList.innerHTML = '<li class="text-gray-300">Loading...</li>';
+  try {
+    const res = await fetch('/daily_absent_students', { headers: { 'Accept': 'application/json' } });
+    const data = await res.json();
+    const list = Array.isArray(data.absent_students) ? data.absent_students : [];
+    if (absentCount) absentCount.textContent = String(list.length);
+    if (!absentList) return;
+    if (list.length === 0) {
+      absentList.innerHTML = '<li class="text-green-300">All present today</li>';
+      return;
+    }
+    absentList.innerHTML = list.map(s => {
+      const status = (s.status||'').toLowerCase();
+      const statusClass = (status === 'no record') ? 'text-yellow-300' : 'text-red-300';
+      return `<li class="flex justify-between items-center">
+        <span>${s.name} <span class="text-xs text-gray-300">(${s.rollno})</span></span>
+        <span class="text-xs ${statusClass}">${s.status||''}</span>
+      </li>`;
+    }).join('');
+  } catch (err) {
+    if (absentList) absentList.innerHTML = '<li class="text-red-300">Error loading absent students.</li>';
+    if (absentCount) absentCount.textContent = '';
+  }
+}
+
+// --- Low Attendance Alert Card ---
+async function updateLowAttendanceCard() {
+  try {
+    const res = await fetch('/all_students_attendance_averages');
+    const data = await res.json();
+    const lowList = document.getElementById('low-attendance-list');
+    const lowCount = document.getElementById('low-attendance-count');
+    if (data && data.success && Array.isArray(data.students)) {
+      const low = data.students.filter(s => Number(s.attendance_average || 0) < 75);
+      lowCount.textContent = low.length;
+      if (low.length === 0) {
+        lowList.innerHTML = '<li>No students below 75% attendance</li>';
+      } else {
+        lowList.innerHTML = low.slice(0, 15).map(s => {
+          const pct = Number(s.attendance_average || 0).toFixed(2);
+          return `<li>${s.name} (Roll: ${s.rollno}) — <span class="text-red-400 font-semibold">${pct}%</span></li>`;
+        }).join('');
+      }
+    } else {
+      lowList.innerHTML = '<li>Error loading data.</li>';
+      lowCount.textContent = '';
+    }
+  } catch (e) {
+    document.getElementById('low-attendance-list').innerHTML = '<li>Error loading data.</li>';
+    document.getElementById('low-attendance-count').textContent = '';
+  }
+}
+
+// --- Dashboard cards HTML ---
+const dashboardCardsHTML = `
+<div id="dashboard-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <!-- Total Students Card -->
+  <div class="bg-gradient-to-br from-blue-900 to-blue-800 rounded-xl shadow-soft p-6 flex flex-col items-center">
+    <div class="text-lg font-semibold text-white mb-2">Total Students</div>
+    <div id="total-students" class="text-4xl font-bold text-white">--</div>
+  </div>
+  <!-- Total Teachers Card -->
+  <div class="bg-gradient-to-br from-purple-900 to-purple-800 rounded-xl shadow-soft p-6 flex flex-col items-center">
+    <div class="text-lg font-semibold text-white mb-2">Total Teachers</div>
+    <div id="total-teachers" class="text-4xl font-bold text-white">--</div>
+  </div>
+  <!-- Daily Absent Students Card -->
+  <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl shadow-soft p-6 col-span-1 md:col-span-1">
+    <div class="flex justify-between items-center mb-2">
+      <div class="text-lg font-semibold text-white">Daily Absent Students</div>
+      <div class="flex items-center gap-2">
+        <button id="admin-refresh-absent" class="px-2 py-1 bg-pink-600 text-white rounded text-xs">Refresh</button>
+        <span id="absent-count" class="text-sm text-red-400"></span>
+      </div>
+    </div>
+    <ul id="absent-list" class="text-white space-y-1 max-h-40 overflow-y-auto text-sm"></ul>
+    <div class="text-xs text-gray-400 mt-2">Updated from attendance</div>
+  </div>
+  <!-- Low Attendance Alert Card -->
+  <div class="bg-gradient-to-br from-red-900 to-red-800 rounded-xl shadow-soft p-6 col-span-1 md:col-span-1">
+    <div class="flex justify-between items-center mb-2">
+      <div class="text-lg font-semibold text-white">Low Attendance Alert</div>
+      <span id="low-attendance-count" class="text-sm text-red-300"></span>
+    </div>
+    <ul id="low-attendance-list" class="text-white space-y-1 max-h-40 overflow-y-auto text-sm"></ul>
+    <div class="text-xs text-gray-400 mt-2">Pulled from /all_students_attendance_averages</div>
+  </div>
+</div>
+`;
+
+// --- Attendance Overview Section (for attendance page only) ---
+const attendanceOverviewPageHTML = `
+<div class="container mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold text-on-dark">Students Attendance Overview</h2>
+    <div class="flex items-center gap-2">
+      <div id="admin-att-loading" class="text-sm muted-on-dark">Loading attendance...</div>
+      <button id="admin-sync-attendance-btn" title="Sync from Google Sheets" class="ml-2 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"><i class="fas fa-cloud-download-alt"></i> Sync</button>
+      <button id="admin-refresh-attendance-btn" title="Refresh" class="ml-2 px-2 py-1 bg-pink-600 text-white rounded hover:bg-pink-700 text-xs"><i class="fas fa-sync-alt"></i></button>
+    </div>
+  </div>
+
+  
+  <div id="admin-att-error" class="text-sm text-red-500 mb-3 hidden"></div>
+  <div class="glass-dark neon-border overflow-hidden">
+    <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+      <table class="min-w-full table-glass" id="admin-att-table">
+        <thead>
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Reg No</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Roll No</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Present Days</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Days</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Attendance %</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+          </tr>
+        </thead>
+        <tbody id="admin-att-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="mt-2 text-xs muted-on-dark">Fetched from /all_students_attendance_averages</div>
+</div>
+`;
+
+// --- Attendance Overview Loader (already present, reused) ---
+async function loadAdminAttendanceOverview() {
+  console.log('[DEBUG] Loading admin attendance overview...');
+  const loadingEl = document.getElementById('admin-att-loading');
+  const errorEl = document.getElementById('admin-att-error');
+  const tbodyEl = document.getElementById('admin-att-tbody');
+  
+  console.log('[DEBUG] Elements found:', { loadingEl, errorEl, tbodyEl });
+  
+  if (tbodyEl) tbodyEl.innerHTML = '';
+  if (errorEl) errorEl.classList.add('hidden');
+  
+  try {
+    console.log('[DEBUG] Fetching from /all_students_attendance_averages...');
+    const response = await fetch('/all_students_attendance_averages');
+    console.log('[DEBUG] Response status:', response.status, response.ok);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[DEBUG] Response data:', data);
+    
+    const students = Array.isArray(data.students) ? data.students : [];
+    console.log('[DEBUG] Students array length:', students.length);
+    
+    if (students.length === 0) {
+      console.log('[DEBUG] No students found, showing empty message');
+      if (tbodyEl) tbodyEl.innerHTML = `<tr><td colspan="7" class="px-6 py-4 text-center muted-on-dark">No attendance data available.</td></tr>`;
+      return;
+    }
+    
+    console.log('[DEBUG] Rendering attendance table with', students.length, 'students');
+    if (tbodyEl) {
+      tbodyEl.innerHTML = students.map(student => {
+        const percentage = Number(student.attendance_average || 0);
+        let colorClass = 'text-red-400', bgColorClass = 'bg-red-900/20', statusText = 'Poor';
+        if (percentage >= 90) { colorClass = 'text-green-400'; bgColorClass = 'bg-green-900/20'; statusText = 'Excellent'; }
+        else if (percentage >= 75) { colorClass = 'text-blue-400'; bgColorClass = 'bg-blue-900/20'; statusText = 'Good'; }
+        else if (percentage >= 60) { colorClass = 'text-yellow-400'; bgColorClass = 'bg-yellow-900/20'; statusText = 'Fair'; }
+        const regNo = student.reg_no || student.id || '-';
+        return `
+          <tr class="border-b border-white/10">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-on-dark">${regNo}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.name || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.rollno || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.present_days ?? '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.total_days ?? '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${colorClass}">${percentage.toFixed(2)}%</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgColorClass} ${colorClass}">${statusText}</span>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+    console.log('[DEBUG] Attendance table rendered successfully');
+  } catch (err) {
+    console.error('[ERROR] Failed to load attendance overview:', err);
+    if (errorEl) { 
+      errorEl.textContent = `Error loading attendance data: ${err.message}`; 
+      errorEl.classList.remove('hidden'); 
+    }
+    if (tbodyEl) tbodyEl.innerHTML = `<tr><td colspan="7" class="px-6 py-4 text-center muted-on-dark">Error loading attendance data: ${err.message}</td></tr>`;
+  } finally {
+    if (loadingEl) loadingEl.classList.add('hidden');
+    console.log('[DEBUG] Loading indicator hidden');
+  }
+}
+
+// --- Render content function (update to handle attendance page) ---
+function renderContent(content) {
+  document.getElementById('main-content').innerHTML = content;
+  // If attendance page, load attendance table and set up refresh/interval
+  if (content === attendanceOverviewPageHTML) {
+    loadAdminAttendanceOverview();
+    setTimeout(() => {
+      const refreshBtn = document.getElementById('admin-refresh-attendance-btn');
+      const syncBtn = document.getElementById('admin-sync-attendance-btn');
+      
+      if (refreshBtn) refreshBtn.onclick = () => loadAdminAttendanceOverview();
+      
+      if (syncBtn) {
+        syncBtn.onclick = async () => {
+          console.log('[DEBUG] Manual sync button clicked');
+          try {
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+            
+            const response = await fetch('/sync_attendance', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+              console.log('[DEBUG] Sync successful:', result);
+              alert(`Sync completed! ${result.message}`);
+              loadAdminAttendanceOverview(); // Reload the table
+            } else {
+              console.error('[ERROR] Sync failed:', result);
+              alert(`Sync failed: ${result.message}`);
+            }
+          } catch (error) {
+            console.error('[ERROR] Sync error:', error);
+            alert(`Sync error: ${error.message}`);
+          } finally {
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Sync';
+          }
+        };
+      }
+      
+      if (window.adminAttendanceInterval) clearInterval(window.adminAttendanceInterval);
+      window.adminAttendanceInterval = setInterval(loadAdminAttendanceOverview, 60000);
+
+      // Bind absent refresh
+      const abtn = document.getElementById('admin-refresh-absent');
+      if (abtn) abtn.onclick = updateAbsentStudentsCard;
+    }, 100);
+  }
+  // No-op for students page append to avoid undefined references
+}
+
+window.approveOutPass = async function(id){
+  try{
+    await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'approved' }) });
+  }catch(e){}
+  if (window.refreshAdminPasses) window.refreshAdminPasses();
+}
+window.rejectOutPass = async function(id){
+  try{
+    await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'rejected' }) });
+  }catch(e){}
+  if (window.refreshAdminPasses) window.refreshAdminPasses();
+}
+
+// --- Page loader function (add attendance page) ---
+function loadPage(page) {
+  switch(page) {
+    case 'dashboard':
+      renderContent(dashboardCardsHTML);
+      fetchCounts();
+      updateAbsentStudentsCard();
+      updateLowAttendanceCard();
+      break;
+    case 'students':
+      loadAllStudents();
+      break;
+    case 'attendance':
+      renderContent(attendanceOverviewPageHTML);
+      break;
+    case 'teachers':
+      loadAllTeachers();
+      break;
+    case 'courses':
+      renderContent(coursesListContent);
+      setTimeout(loadCourses, 0);
+      break;
+    default:
+      renderContent('<h2>Page not found</h2>');
+  }
+}
+
+// --- Students List ---
+async function loadAllStudents() {
+  try {
+    const students = await fetch('/students').then(r => r.json());
+    const columns = [
+      { key: 'id', label: 'ID', width: 'w-16' },
+      { key: 'reg_no', label: 'Reg No', width: 'w-24' },
+      { key: 'rollno', label: 'Roll No', width: 'w-24' },
+      { key: 'name', label: 'Name', width: 'w-40' },
+      { key: 'dob', label: 'DOB', width: 'w-24' },
+      { key: 'gender', label: 'Gender', width: 'w-20' },
+      { key: 'aadhar', label: 'Aadhar', width: 'w-32' },
+      { key: 'student_mobile', label: 'Student Mobile', width: 'w-32' },
+      { key: 'blood_group', label: 'Blood Group', width: 'w-24' },
+      { key: 'parent_name', label: 'Parent Name', width: 'w-40' },
+      { key: 'parent_mobile', label: 'Parent Mobile', width: 'w-32' },
+      { key: 'address', label: 'Address', width: 'w-60' },
+      { key: 'nationality', label: 'Nationality', width: 'w-28' },
+      { key: 'religion', label: 'Religion', width: 'w-28' },
+      { key: 'community', label: 'Community', width: 'w-28' },
+      { key: 'caste', label: 'Caste', width: 'w-28' },
+      { key: 'day_scholar_or_hosteller', label: 'Day Scholar/Hosteller', width: 'w-40' },
+      { key: 'current_semester', label: 'Class/Semester', width: 'w-32' },
+      { key: 'seat_type', label: 'Seat Type', width: 'w-28' },
+      { key: 'quota_type', label: 'Quota Type', width: 'w-28' },
+      { key: 'email', label: 'Email', width: 'w-60' },
+      { key: 'pmss', label: 'PMSS', width: 'w-24' },
+      { key: 'remarks', label: 'Remarks', width: 'w-40' },
+      { key: 'bus_no', label: 'Bus No', width: 'w-24' },
+      { key: 'outside_staying_address', label: 'Outstaying Address', width: 'w-60' },
+      { key: 'hosteller_room_no', label: 'Room No', width: 'w-24' },
+      { key: 'owner_ph_no', label: "Owner's Phone", width: 'w-32' },
+      { key: 'user_id', label: 'User ID', width: 'w-28' },
+      { key: 'password', label: 'Password', width: 'w-32', isPassword: true }
+    ];
+
+    const headerHtml = columns.map(col => `<th class="px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wider ${col.width} text-left whitespace-nowrap">${col.label}</th>`).join('') + `<th class="px-3 py-2 text-[11px] font-semibold text-gray-600 uppercase tracking-wider w-24 text-left">Action</th>`;
+
+    const rowsHtml = students.map((s, idx) => {
+      const cells = columns.map(col => {
+        if (col.isPassword) {
+          const pwd = s.password ?? '';
+          const encoded = encodeURIComponent(pwd);
+          const spanId = `pw-${s.id}`;
+          return `<td class="px-3 py-2 text-[12px] ${col.width} whitespace-nowrap align-top"><span id="${spanId}" class="font-mono select-all">••••••••</span><button type="button" class="ml-1 text-xs text-blue-600 hover:underline" data-encoded-="${encoded}" data-span-id="${spanId}" data-shown="0" onclick="togglePassword('${spanId}', this)">Show</button></td>`;
+        }
+        let value = (s[col.key] ?? '').toString();
+        if (col.key === 'bus_no') {
+          value = s.bus_no || '';
+        }
+        if (col.key === 'outside_staying_address') {
+          value = s.outside_staying_address || '';
+        }
+        const displayValue = value === 'null' || value === 'undefined' ? '' : value;
+        return `<td class="px-3 py-2 text-[12px] ${col.width} truncate align-top" title="${displayValue}">${displayValue}</td>`;
+      }).join('');
+      return `<tr class="border-b border-white/5 hover:bg-white/5">${cells}<td class="px-3 py-2 text-[12px] w-24 whitespace-nowrap"><div class="flex space-x-1"><button class="text-red-400 hover:text-red-300 hover:underline text-xs" onclick="deleteStudent(${s.id})">Delete</button><button class="text-green-400 hover:text-green-300 hover:underline text-xs" onclick="resetPassword(${s.id})">Reset</button></div></td></tr>`;
+    }).join('');
+
+    renderContent(`<div class="container mx-auto"><div class="flex items-center justify-between mb-4"><h2 class="text-2xl font-semibold text-on-dark">All Students</h2><label class="flex items-center space-x-2 muted-on-dark"><input id=\"toggle-all-passwords\" type=\"checkbox\" class=\"form-checkbox\"><span class=\"text-sm\">Show all passwords</span></label></div><div class="glass-dark neon-border overflow-hidden"><div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="min-w-full table-glass"><thead class="sticky top-0 z-10"><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div><div class="mt-4 text-sm muted-on-dark"><p><strong>Total students:</strong> ${students.length}</p></div></div>`);
+
+    // Attach event listener after DOM is updated
+    setTimeout(() => {
+      const toggleAll = document.getElementById('toggle-all-passwords');
+      if (toggleAll) {
+        toggleAll.addEventListener('change', (e) => {
+          console.log('Toggle all passwords:', e.target.checked);
+          toggleAllPasswords(e.target.checked);
+        });
+      }
+    }, 100);
+  } catch (err) { console.error(err); alert('Error loading students'); }
+}
+
+// --- Teachers List ---
+async function loadAllTeachers() {
+  try {
+    const teachers = await fetch('/teachers').then(r => r.json());
+    const columns = [
+      { key:'id',label:'ID',width:'w-16'},
+      { key:'teacher_name',label:'Name',width:'w-32'},
+      { key:'department',label:'Department',width:'w-28'},
+      { key:'user_id',label:'Username',width:'w-24'},
+      { key:'password',label:'Password',width:'w-32',isPassword:true}
+    ];
+    const headerHtml = columns.map(col => `<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 ${col.width} text-left whitespace-nowrap">${col.label}</th>`).join('') + `<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 w-24 text-left">Action</th>`;
+    const rowsHtml = teachers.map((t, idx) => {
+      const cells = columns.map(col => {
+        if (col.isPassword) {
+          const pwd = t.password ?? '';
+          const encoded = encodeURIComponent(pwd);
+          const spanId = `pw-t-${t.id}`;
+          return `<td class="px-3 py-2 text-[12px] ${col.width} whitespace-nowrap align-top"><span id="${spanId}" class="font-mono select-all">••••••••</span><button type="button" class="ml-1 text-xs text-blue-600 hover:underline" data-encoded-="${encoded}" data-span-id="${spanId}" data-shown="0" onclick="togglePassword('${spanId}', this)">Show</button></td>`;
+        }
+        const value = (t[col.key] ?? '').toString();
+        const displayValue = value === 'null' || value === 'undefined' ? '' : value;
+        return `<td class="px-3 py-2 text-[12px] ${col.width} truncate align-top" title="${displayValue}">${displayValue}</td>`;
+      }).join('');
+      return `<tr class="border-b border-white/5 hover:bg-white/5">${cells}<td class="px-3 py-2 text-[12px] w-24 whitespace-nowrap"><button class="text-red-400 hover:text-red-300 hover:underline text-xs" onclick="deleteTeacher(${t.id})">Delete</button></td></tr>`;
+    }).join('');
+
+  const addTeacherForm = `
+<div class="glass-dark neon-border p-4 mb-4">
+  <h3 class="text-lg font-semibold text-on-dark mb-3">Add New Teacher</h3>
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <input id="new-teacher-name" type="text" placeholder="Name" class="p-2 rounded bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+    <input id="new-teacher-dept" type="text" placeholder="Department" class="p-2 rounded bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+    <input id="new-teacher-username" type="text" placeholder="Username" class="p-2 rounded bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+    <input id="new-teacher-password" type="text" placeholder="Password" class="p-2 rounded bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+  </div>
+  <div class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+    <select id="new-teacher-role" class="p-2 rounded bg-white/10 border border-white/20 text-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+      <option value="teacher">Teacher</option>
+      <option value="hod">HOD</option>
+      <option value="principal">Principal</option>
+    </select>
+  </div>
+  <div class="mt-3 flex items-center gap-3">
+    <button id="add-teacher-btn" class="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded transition-colors">Add Teacher</button>
+    <div id="add-teacher-msg" class="text-sm muted-on-dark"></div>
+  </div>
+</div>`;
+
+    renderContent(`<div class="container mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-semibold text-on-dark">All Teachers</h2>
+    <label class="flex items-center space-x-2 muted-on-dark"><input id=\"toggle-all-passwords\" type=\"checkbox\" class=\"form-checkbox\"><span class=\"text-sm\">Show all passwords</span></label>
+  </div>
+  ${addTeacherForm}
+  <div class="glass-dark neon-border overflow-hidden">
+    <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <table class="min-w-full table-glass">
+        <thead class="sticky top-0 z-10"><tr>${headerHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>
+</div>`);
+
+    // Attach listeners after DOM update
+    setTimeout(() => {
+      const toggleAll = document.getElementById('toggle-all-passwords');
+      if (toggleAll) {
+        toggleAll.addEventListener('change', (e) => toggleAllPasswords(e.target.checked));
+      }
+      const addBtn = document.getElementById('add-teacher-btn');
+      const msg = document.getElementById('add-teacher-msg');
+      if (addBtn) {
+        addBtn.onclick = async () => {
+          const name = (document.getElementById('new-teacher-name') || {}).value?.trim();
+          const dept = (document.getElementById('new-teacher-dept') || {}).value?.trim();
+          const username = (document.getElementById('new-teacher-username') || {}).value?.trim();
+          const password = (document.getElementById('new-teacher-password') || {}).value?.trim();
+          const role = (document.getElementById('new-teacher-role') || {}).value?.trim() || 'teacher';
+          if (!name || !dept || !username || !password) {
+            if (msg) { msg.textContent = 'All fields are required.'; msg.className = 'text-red-400 text-sm'; }
+            return;
+          }
+          try {
+            if (msg) { msg.textContent = 'Adding teacher...'; msg.className = 'muted-on-dark text-sm'; }
+            const res = await fetch('/add_teacher', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ teacher_name: name, department: dept, user_id: username, password, role })
+            });
+            const result = await res.json();
+            if (result.success) {
+              if (msg) { msg.textContent = 'Teacher added successfully.'; msg.className = 'text-green-400 text-sm'; }
+              loadAllTeachers();
+            } else {
+              if (msg) { msg.textContent = result.message || 'Failed to add teacher.'; msg.className = 'text-red-400 text-sm'; }
+            }
+          } catch (err) {
+            if (msg) { msg.textContent = 'Error adding teacher.'; msg.className = 'text-red-400 text-sm'; }
+          }
+        };
+      }
+    }, 100);
+  } catch (err) { console.error(err); alert('Error loading teachers'); }
+}
+
+// --- Courses List ---
+const coursesListContent = `
+<div class="container mx-auto">
+  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
+  <div class="glass-dark neon-border p-6">
+    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
+    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
+    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  </div>
+</div>
+`;
+
+async function loadCourses(){
+  const ul = document.getElementById('courses-list');
+  const loading = document.getElementById('courses-loading');
+  const empty = document.getElementById('courses-empty');
+  if (!ul) return;
+  try{
+    const res = await fetch('/courses');
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0){
+      if (empty) empty.classList.remove('hidden');
+      ul.innerHTML = '';
+      return;
+    }
+    ul.innerHTML = data.map(c => `
+      <li>
+        <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
+        <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
+      </li>
+    `).join('');
+  } catch (e){
+    ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+  } finally {
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+// --- Password toggle functions ---
+function togglePassword(spanId, button) {
+  const span = document.getElementById(spanId);
+  const isShown = button.getAttribute('data-shown') === '1';
+  const encodedPassword = button.getAttribute('data-encoded-');
+  
+  if (isShown) {
+    // Hide password
+    span.textContent = '••••••••';
+    button.textContent = 'Show';
+    button.setAttribute('data-shown', '0');
+  } else {
+    // Show password
+    const decodedPassword = decodeURIComponent(encodedPassword);
+    span.textContent = decodedPassword;
+    button.textContent = 'Hide';
+    button.setAttribute('data-shown', '1');
+  }
+}
+
+// Make function globally accessible
+window.togglePassword = togglePassword;
+
+function toggleAllPasswords(showAll) {
+  console.log('toggleAllPasswords called with:', showAll);
+  const passwordButtons = document.querySelectorAll('button[data-encoded-]');
+  console.log('Found password buttons:', passwordButtons.length);
+  
+  passwordButtons.forEach((button, index) => {
+    const spanId = button.getAttribute('data-span-id');
+    const span = document.getElementById(spanId);
+    const encodedPassword = button.getAttribute('data-encoded-');
+    
+    console.log(`Processing button ${index}: spanId=${spanId}, span=${span}, encodedPassword=${encodedPassword}`);
+    
+    if (span && encodedPassword) {
+      if (showAll) {
+        // Show all passwords
+        const decodedPassword = decodeURIComponent(encodedPassword);
+        span.textContent = decodedPassword;
+        button.textContent = 'Hide';
+        button.setAttribute('data-shown', '1');
+        console.log(`Showing password for ${spanId}: ${decodedPassword}`);
+      } else {
+        // Hide all passwords
+        span.textContent = '••••••••';
+        button.textContent = 'Show';
+        button.setAttribute('data-shown', '0');
+        console.log(`Hiding password for ${spanId}`);
+      }
+    } else {
+      console.warn(`Missing span or encoded password for button ${index}`);
+    }
+  });
+}
+
+// Make function globally accessible
+window.toggleAllPasswords = toggleAllPasswords;
+
+// --- Delete and reset functions ---
+async function deleteStudent(studentId) {
+  if (confirm('Are you sure you want to delete this student?')) {
+    try {
+      const response = await fetch(`/delete_student/${studentId}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (result.success) {
+        alert('Student deleted successfully');
+        loadAllStudents(); // Reload the students list
+      } else {
+        alert('Error: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error deleting student');
+    }
+  }
+}
+
+async function resetPassword(studentId) {
+  if (confirm('Are you sure you want to reset this student\'s password?')) {
+    try {
+      const response = await fetch(`/reset_student_password/${studentId}`, { method: 'POST' });
+      const result = await response.json();
+      if (result.success) {
+        alert(`Password reset successfully. New password: ${result.new_password}`);
+        loadAllStudents(); // Reload the students list
+      } else {
+        alert('Error: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error resetting password');
+    }
+  }
+}
+
+async function deleteTeacher(teacherId) {
+  if (confirm('Are you sure you want to delete this teacher?')) {
+    try {
+      const response = await fetch(`/delete_teacher/${teacherId}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (result.success) {
+        alert('Teacher deleted successfully');
+        loadAllTeachers(); // Reload the teachers list
+      } else {
+        alert('Error: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error deleting teacher');
+    }
+  }
+}
+
+// --- Initial load: show dashboard and update cards ---
+document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar toggle for mobile
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('sidebar-toggle');
+  const overlay = document.getElementById('sidebar-overlay');
+  
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      if (overlay) overlay.classList.toggle('active');
+    });
+    
+    // Close sidebar when clicking overlay
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+      });
+    }
+    
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth < 768) {
+        if (!sidebar.contains(e.target) && e.target !== toggleBtn) {
+          sidebar.classList.remove('open');
+          if (overlay) overlay.classList.remove('active');
+        }
+      }
+    });
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+      }
+    });
+  }
+  
+  // Menu button toggle (collapse/expand sidebar content)
+  const menuToggle = document.getElementById('sidebar-menu-toggle');
+  if (menuToggle && sidebar) {
+    menuToggle.addEventListener('click', ()=>{
+      const isCollapsed = sidebar.classList.contains('menu-collapsed');
+      if (isCollapsed) {
+        sidebar.classList.remove('menu-collapsed');
+      } else {
+        sidebar.classList.add('menu-collapsed');
+      }
+    });
+  }
+
+  // Sidebar navigation
+  document.querySelectorAll('.sidebar-button[data-page]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const page = this.getAttribute('data-page');
+      loadPage(page);
+      // Close sidebar on mobile after navigation
+      if (window.innerWidth < 768) sidebar.classList.remove('open');
+    });
+  });
+
+  // Logout button
+  document.getElementById('logout-btn').addEventListener('click', function() {
+    window.location.href = '/';
+  });
+
+  // Initial load: show dashboard
+  loadPage('dashboard');
+});
+</script>
+</body>
+</html>

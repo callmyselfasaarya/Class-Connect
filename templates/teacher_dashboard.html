@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .text-on-dark { color: #e5e7eb; }
+    .muted-on-dark { color: #9ca3af; }
+    .glass-dark {
+        background: rgba(30, 30, 46, 0.5);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .neon-border {
+        border-radius: 0.75rem;
+        box-shadow: 0 0 5px rgba(236, 72, 153, 0.3), 0 0 10px rgba(236, 72, 153, 0.2);
+    }
+    .table-glass {
+        background: rgba(30, 30, 46, 0.5);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .table-glass th {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .table-glass tr:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 25;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+        pointer-events: none;
+    }
+    .sidebar-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .sidebar-glass {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      color: #d1d5db;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .sidebar-button:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+    .sidebar-button i {
+      width: 1.25rem;
+      margin-right: 0.75rem;
+      text-align: center;
+    }
+    
+    /* Custom scrollbar styles */
+    .scrollbar-thin {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(156, 163, 175, 0.5) rgba(229, 231, 235, 0.2);
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: rgba(229, 231, 235, 0.2);
+      border-radius: 3px;
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.5);
+      border-radius: 3px;
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+    
+    /* Mobile-specific improvements */
+    @media (max-width: 768px) {
+      .sidebar-glass {
+        width: 280px;
+        transform: translateX(-100%);
+      }
+      .sidebar-glass.open {
+        transform: translateX(0);
+      }
+      .main-content {
+        padding: 1rem;
+      }
+      .glass-dark {
+        margin: 0.5rem 0;
+      }
+      .grid {
+        gap: 1rem;
+      }
+      .text-4xl {
+        font-size: 2rem;
+      }
+      .text-2xl {
+        font-size: 1.5rem;
+      }
+      .p-6 {
+        padding: 1rem;
+      }
+      .px-6 {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      .py-4 {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      .table-glass {
+        font-size: 0.875rem;
+      }
+      .table-glass th,
+      .table-glass td {
+        padding: 0.5rem;
+      }
+      #sidebar-toggle {
+        display: block;
+      }
+    }
+    
+    @media (min-width: 769px) {
+      #sidebar-toggle {
+        display: none;
+      }
+      .sidebar-glass {
+        transform: translateX(0);
+      }
+    }
+  </style>
+</head>
+<body class="bg-[#2a104f] min-h-screen relative overflow-hidden">
+
+  <div id="vanta-bg" class="fixed top-0 left-0 w-full h-full z-0"></div>
+  <!-- Decorative floating elements -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute top-20 left-10 w-20 h-20 bg-white bg-opacity-10 rounded-full blur-xl"></div>
+    <div class="absolute top-40 right-20 w-32 h-32 bg-white bg-opacity-5 rounded-full blur-2xl"></div>
+    <div class="absolute bottom-20 left-1/4 w-24 h-24 bg-white bg-opacity-15 rounded-full blur-lg"></div>
+    <div class="absolute bottom-40 right-1/3 w-16 h-16 bg-white bg-opacity-20 rounded-full blur-md"></div>
+  </div>
+<button id="sidebar-toggle" class="fixed top-4 left-4 z-50 md:hidden bg-pink-600 text-white p-2 rounded shadow">
+  <i class="fas fa-bars"></i>
+</button>
+
+<div class="flex h-screen relative z-10">
+  <!-- Sidebar Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+  
+  <aside id="sidebar" class="sidebar-glass sidebar-parallax w-64 h-screen fixed left-0 top-0 transform -translate-x-full md:translate-x-0 md:relative transition-transform duration-300 z-30 text-white">
+    <!-- Sidebar content here -->
+    <div class="sidebar-header px-6 py-4 font-bold text-lg">
+      <div class="flex items-center justify-between">
+        <button id="sidebar-menu-toggle" class="p-2 rounded hover:bg-white/10" title="Toggle menu">
+          <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14v2H3V5zm0 4h14v2H3V9zm0 4h14v2H3v-2z" clip-rule="evenodd"/></svg>
+        </button>
+        <span class="ml-4">Teacher</span>
+      </div>
+    </div>
+    <nav class="sidebar-content px-2">
+      <button class="sidebar-button" data-page="dashboard"><i class="fas fa-home"></i><span class="label">Dashboard</span></button>
+      <button class="sidebar-button" data-page="search"><i class="fas fa-search"></i><span class="label">Search Students</span></button>
+      <button class="sidebar-button" data-page="attendance"><i class="fas fa-chart-line"></i><span class="label">Attendance Overview</span></button>
+      <button class="sidebar-button" data-page="view"><i class="fas fa-users"></i><span class="label">View Students</span></button>
+      <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Course List</span></button>
+      <button class="sidebar-button" data-page="passes"><i class="fas fa-ticket"></i><span class="label">Out Pass Approvals</span></button>
+      <button class="sidebar-button" data-page="change-password"><i class="fas fa-key"></i><span class="label">Change Password</span></button>
+      <button class="sidebar-button mt-8 w-full flex items-center justify-start text-red-500" id="logout-btn">
+        <i class="fas fa-sign-out-alt mr-2"></i>
+        <span class="label">Logout</span>
+      </button>
+    </nav>
+  </aside>
+  <div id="main-wrapper" class="flex-1 flex flex-col overflow-hidden md:ml-10 transition-all duration-300">
+    <main id="main-content" class="flex-1 p-6 overflow-y-auto"></main>
+  </div>
+</div>
+
+  <!-- Student Details Modal -->
+  <div id="student-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+    <div id="student-modal-content" class="glass-dark neon-border p-6 w-full max-w-[90vw] sm:max-w-3xl relative max-h-[85vh] overflow-y-auto scrollbar-thin">
+      <button id="close-modal" class="absolute top-3 right-3 text-gray-400 hover:text-white">✕</button>
+      <h3 class="text-lg font-bold text-on-dark mb-4">Student Details</h3>
+      <div id="student-details" class="space-y-2 text-on-dark">Loading...</div>
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    VANTA.NET({
+        el: "#vanta-bg",
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        scaleMobile: 1.00,
+        color: 0xec4899,
+        backgroundColor: 0x2a104f,
+        points: 10.00,
+        maxDistance: 25.00,
+        spacing: 18.00
+    });
+
+    let allStudents = [];
+
+    // Content Templates
+    const welcomeContent = `
+    <div class="space-y-6">
+      <div class="glass-dark neon-border p-6">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-bold text-on-dark">Daily Absent Students</h2>
+          <span id="teacher-absent-count" class="text-sm text-red-400 font-semibold"></span>
+        </div>
+        <div id="teacher-absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+          <div class="muted-on-dark">Loading absent students...</div>
+        </div>
+        <div class="mt-3 text-xs muted-on-dark">Updated from Google Sheets attendance data</div>
+      </div>
+      
+      <div class="glass-dark neon-border p-6">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-bold text-on-dark">Low Attendance Alert</h2>
+          <span id="low-attn-count" class="text-sm muted-on-dark"></span>
+        </div>
+        <ul id="announcements-list" class="list-disc pl-5 space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+          <li class="muted-on-dark">Loading announcements...</li>
+        </ul>
+      </div>
+    </div>
+    `;
+
+    const searchContent = `
+    <div class="glass-dark neon-border p-6">
+      <h2 class="text-lg font-bold text-on-dark mb-4">Search Students</h2>
+      <input id="search-bar" type="text" placeholder="Search by name or roll no..." class="w-full p-3 rounded mb-4 bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+      <div class="overflow-x-auto">
+        <table class="min-w-full table-glass">
+          <thead>
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Roll No</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
+            </tr>
+          </thead>
+          <tbody id="search-results"></tbody>
+        </table>
+      </div>
+    </div>
+    `;
+
+    const teacherFullStudentTableContent = `
+    <div class="container mx-auto">
+      <h2 class="text-2xl font-semibold text-on-dark mb-4">All Students (Full View)</h2>
+      <div class="glass-dark neon-border overflow-hidden">
+        <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+          <table class="min-w-full table-glass">
+            <thead class="sticky top-0 z-10">
+              <tr id="teacher-student-table-header"></tr>
+            </thead>
+            <tbody id="teacher-student-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    `;
+
+    const attendanceContent = `
+    <div class="container mx-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-semibold text-on-dark">Students Attendance Overview</h2>
+        <div id="att-loading" class="text-sm muted-on-dark">Loading attendance...</div>
+      </div>
+      <div id="att-error" class="text-sm text-red-500 mb-3 hidden"></div>
+      <div class="glass-dark neon-border overflow-hidden">
+        <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+          <table class="min-w-full table-glass" id="att-table">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Reg No</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Roll No</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Present Days</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Days</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Attendance %</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+              </tr>
+            </thead>
+            <tbody id="att-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="mt-2 text-xs muted-on-dark">Fetched from /teacher/all_students_attendance_averages</div>
+      </div>
+    `;
+
+    const changePasswordContent = `
+    <div class="glass-dark neon-border p-6 max-w-md mx-auto">
+      <h2 class="text-lg font-bold text-on-dark mb-4">Change My Password</h2>
+      <label class="block text-sm font-medium text-on-dark">New Password</label>
+      <input type="password" id="new-password" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-on-dark placeholder:muted-on-dark focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+      <button id="change-password-btn" class="mt-4 w-full bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 transition-colors">Change Password</button>
+      <p id="password-message" class="text-sm mt-2"></p>
+    </div>
+    `;
+
+    const coursesContent = `
+<div class="container mx-auto">
+  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
+  <div class="glass-dark neon-border p-6">
+    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
+    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
+    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  </div>
+</div>
+`;
+
+    const passesContent = `
+    <div class="container mx-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-semibold text-on-dark">Out Pass Approvals (Advisor)</h2>
+        <button id="tch-refresh-passes" class="px-3 py-1 bg-blue-600 text-white rounded text-xs">Refresh</button>
+      </div>
+      <div id="tch-passes-error" class="text-sm text-red-400 mb-2 hidden"></div>
+      <div class="glass-dark neon-border overflow-hidden">
+        <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+          <table class="min-w-full table-glass">
+            <thead>
+              <tr>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Roll</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dept</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">From</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">To</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Details</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tch-passes-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+
+    function renderContent(content) {
+      document.getElementById('main-content').innerHTML = content;
+    }
+
+    function handleNavigation(page) {
+      switch (page) {
+        case "search": renderContent(searchContent); initSearch(); break;
+        case "attendance": renderContent(attendanceContent); setTimeout(loadTeachersAttendance, 0); break;
+        case "view": 
+          renderContent(teacherFullStudentTableContent);
+          setTimeout(() => { renderTeacherFullStudentTable(allStudents); }, 0);
+          break;
+        case "change-password": renderContent(changePasswordContent); document.getElementById('change-password-btn').onclick = changePassword; break;
+        case "courses": renderContent(coursesContent); setTimeout(loadCourses, 0); break;
+        case "passes": renderContent(passesContent); setTimeout(initTeacherPasses, 0); break;
+        case "dashboard":
+        default:
+          renderContent(welcomeContent);
+          setTimeout(loadTeacherDailyAbsentStudents, 0);
+          setTimeout(loadLowAttendanceAnnouncements, 200);
+          break;
+      }
+    }
+
+    // Sidebar Toggles & Navigation
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+    const overlay = document.getElementById('sidebar-overlay');
+    const menuToggle = document.getElementById('sidebar-menu-toggle');
+
+    if (toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        });
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }
+        });
+    }
+    
+    if (menuToggle && sidebar) {
+    menuToggle.addEventListener('click', ()=>{
+      const isCollapsed = sidebar.classList.contains('menu-collapsed');
+      if (isCollapsed) {
+        sidebar.classList.remove('menu-collapsed');
+      } else {
+        sidebar.classList.add('menu-collapsed');
+      }
+    });
+  }
+
+    document.querySelectorAll('.sidebar-button[data-page]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const page = this.getAttribute('data-page');
+            handleNavigation(page);
+            if (window.innerWidth < 768) {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.remove('active');
+            }
+        });
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => window.location.href = '/logout');
+
+    // Modal Logic
+    const studentModal = document.getElementById('student-modal');
+    document.getElementById('close-modal').onclick = () => studentModal.classList.add('hidden');
+    studentModal.onclick = function(e) { if (e.target === this) this.classList.add('hidden'); };
+
+    // Data Loading
+    async function loadStudents() {
+      try {
+        const res = await fetch('/students');
+        allStudents = await res.json();
+      } catch (e) { console.error('Error loading students', e); }
+    }
+
+    async function loadTeacherDailyAbsentStudents() {
+      const listEl = document.getElementById('teacher-absent-list');
+      const countEl = document.getElementById('teacher-absent-count');
+      if (!listEl) return;
+      try {
+        const res = await fetch('/teacher/daily_absent_students', { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        const absentStudents = data?.success ? data.absent_students : [];
+        
+        if (countEl) countEl.textContent = `${absentStudents.length} absent today`;
+        
+        if (absentStudents.length === 0) {
+          listEl.innerHTML = '<div class="text-green-400 font-semibold">🎉 All students present today!</div>';
+          return;
+        }
+        
+        listEl.innerHTML = absentStudents.map(s => `
+          <div class="flex justify-between items-center p-2 bg-white/5 rounded">
+            <div>
+              <span class="font-semibold">${s.name}</span>
+              <span class="text-xs muted-on-dark ml-2">(${s.rollno})</span>
+            </div>
+            <span class="text-xs ${s.status === 'No record' ? 'text-yellow-400' : 'text-red-400'}">${s.status}</span>
+          </div>`).join('');
+      } catch (e) {
+        listEl.innerHTML = '<div class="text-red-400">Error loading absent students.</div>';
+      }
+    }
+
+    async function loadLowAttendanceAnnouncements() {
+      const listEl = document.getElementById('announcements-list');
+      const countEl = document.getElementById('low-attn-count');
+      if (!listEl) return;
+      try {
+        const res = await fetch('/teacher/all_students_attendance_averages');
+        const data = await res.json();
+        const students = data?.success ? data.students : [];
+        const low = students.filter(s => (s.attendance_average || 0) < 75);
+        
+        if (countEl) countEl.textContent = `${low.length} below 75%`;
+        if (low.length === 0) {
+          listEl.innerHTML = '<li class="muted-on-dark">No students below 75% attendance 🎉</li>';
+          return;
+        }
+        listEl.innerHTML = low.slice(0, 15).map(s => `
+          <li><span class="font-semibold">${s.name}</span> (Roll: ${s.rollno}) — <span class="text-red-400 font-semibold">${Number(s.attendance_average || 0).toFixed(2)}%</span></li>
+        `).join('');
+      } catch (e) {
+        listEl.innerHTML = '<li class="text-red-400">Error loading announcements.</li>';
+      }
+    }
+
+    async function loadTeachersAttendance() {
+      const loadingEl = document.getElementById('att-loading');
+      const errorEl = document.getElementById('att-error');
+      const tbodyEl = document.getElementById('att-tbody');
+      if (tbodyEl) tbodyEl.innerHTML = '';
+      if (errorEl) errorEl.classList.add('hidden');
+      try {
+        const response = await fetch('/teacher/all_students_attendance_averages');
+        const data = await response.json();
+        const students = data?.success ? data.students : [];
+
+        tbodyEl.innerHTML = students.map(student => {
+          const percentage = Number(student.attendance_average || 0);
+          let colorClass = 'text-red-400', bgColorClass = 'bg-red-900/20', statusText = 'Poor';
+          if (percentage >= 90) { colorClass = 'text-green-400'; bgColorClass = 'bg-green-900/20'; statusText = 'Excellent'; }
+          else if (percentage >= 75) { colorClass = 'text-blue-400'; bgColorClass = 'bg-blue-900/20'; statusText = 'Good'; }
+          else if (percentage >= 60) { colorClass = 'text-yellow-400'; bgColorClass = 'bg-yellow-900/20'; statusText = 'Fair'; }
+          return `
+            <tr class="border-b border-white/10">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-on-dark">${student.reg_no || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.name}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.rollno}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.present_days}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${student.total_days}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${colorClass}">${percentage.toFixed(2)}%</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgColorClass} ${colorClass}">${statusText}</span>
+              </td>
+            </tr>`;
+        }).join('');
+      } catch (err) {
+        if (errorEl) { errorEl.textContent = 'Error loading attendance.'; errorEl.classList.remove('hidden'); }
+      } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+      }
+    }
+
+    async function loadCourses(){
+      const ul = document.getElementById('courses-list');
+      const loading = document.getElementById('courses-loading');
+      const empty = document.getElementById('courses-empty');
+      if (!ul) return;
+      try{
+        const res = await fetch('/courses');
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0){
+          if (empty) empty.classList.remove('hidden');
+          ul.innerHTML = '';
+          return;
+        }
+        ul.innerHTML = data.map(c => `
+          <li>
+            <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
+            <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
+          </li>
+        `).join('');
+      } catch (e){
+        ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+      } finally {
+        if (loading) loading.classList.add('hidden');
+      }
+    }
+
+    function renderTeacherFullStudentTable(data) {
+      const columns = [
+        { key: 'id', label: 'ID' }, { key: 'reg_no', label: 'Reg No' }, { key: 'rollno', label: 'Roll No' },
+        { key: 'name', label: 'Name' }, { key: 'dob', label: 'DOB' }, { key: 'gender', label: 'Gender' },
+        { key: 'aadhar', label: 'Aadhar' }, { key: 'student_mobile', label: 'Student Mobile' },
+        { key: 'blood_group', label: 'Blood Group' }, { key: 'parent_name', label: 'Parent Name' },
+        { key: 'parent_mobile', label: 'Parent Mobile' }, { key: 'address', label: 'Address' },
+        { key: 'nationality', label: 'Nationality' }, { key: 'religion', label: 'Religion' },
+        { key: 'community', label: 'Community' }, { key: 'caste', label: 'Caste' },
+        { key: 'day_scholar_or_hosteller', label: 'Day Scholar/Hosteller' }, { key: 'current_semester', label: 'Class/Semester' },
+        { key: 'seat_type', label: 'Seat Type' }, { key: 'quota_type', label: 'Quota Type' }, { key: 'email', label: 'Email' },
+        { key: 'pmss', label: 'PMSS' }, { key: 'remarks', label: 'Remarks' }, { key: 'bus_no', label: 'Bus No' },
+        { key: 'outside_staying_address', label: 'Outstaying Address' }, { key: 'hosteller_room_no', label: 'Room No' },
+        { key: 'owner_ph_no', label: "Owner's Phone" }
+      ];
+      const headerRow = document.getElementById('teacher-student-table-header');
+      if (headerRow) {
+        headerRow.innerHTML = columns.map(col => `<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">${col.label}</th>`).join('');
+      }
+      const body = document.getElementById('teacher-student-table-body');
+      if (!body) return;
+      body.innerHTML = data.map(s => `
+        <tr class="border-b border-white/5 hover:bg-white/5">
+          ${columns.map(col => `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[col.key] || ''}">${s[col.key] || ''}</td>`).join('')}
+        </tr>
+      `).join('');
+    }
+
+    async function initTeacherPasses(){
+      const tbody = document.getElementById('tch-passes-tbody');
+      const err = document.getElementById('tch-passes-error');
+      const refresh = async () => {
+        if (tbody) tbody.innerHTML = '';
+        if (err) err.classList.add('hidden');
+        try {
+          const res = await fetch('/out_pass/pending');
+          const data = await res.json();
+          const rows = (data && data.success && Array.isArray(data.passes)) ? data.passes : [];
+          if (tbody) tbody.innerHTML = rows.map(p => `
+            <tr class="border-b border-white/10">
+              <td class="px-3 py-2 text-sm text-on-dark">${p.requester_name||''}</td>
+              <td class="px-3 py-2 text-sm muted-on-dark">${p.rollno||''}</td>
+              <td class="px-3 py-2 text-sm muted-on-dark">${p.department||''}</td>
+              <td class="px-3 py-2 text-sm muted-on-dark">${p.pass_type||''}</td>
+              <td class="px-3 py-2 text-sm muted-on-dark">${p.from_datetime||''}</td>
+              <td class="px-3 py-2 text-sm muted-on-dark">${p.to_datetime||''}</td>
+              <td class="px-3 py-2 text-xs muted-on-dark">${(p.pass_type==='od_pass')? (p.od_duration||'') + (p.od_duration==='n_days'?` (${p.od_days||''}d)`: '') : (p.pass_type==='other'? (p.other_hours||'') : '')}</td>
+              <td class="px-3 py-2 text-sm">
+                <button class="px-2 py-1 bg-green-600 text-white rounded mr-2 text-xs" onclick="teacherApprovePass(${p.id})">Approve</button>
+                <button class="px-2 py-1 bg-red-600 text-white rounded text-xs" onclick="teacherRejectPass(${p.id})">Reject</button>
+              </td>
+            </tr>`).join('');
+        } catch (e) {
+          if (err) { err.textContent = 'Error loading passes'; err.classList.remove('hidden'); }
+        }
+      };
+      const btn = document.getElementById('tch-refresh-passes');
+      if (btn) btn.onclick = refresh;
+      window._teacherRefreshPasses = refresh;
+      refresh();
+    }
+
+    window.teacherApprovePass = async function(id){
+      try{
+        // Allow teacher to tweak time/day upon approval
+        const fromNew = prompt('Optionally adjust FROM datetime (YYYY-MM-DD HH:MM), or leave empty');
+        const toNew = prompt('Optionally adjust TO datetime (YYYY-MM-DD HH:MM), or leave empty');
+        const remarks = prompt('Remarks (optional)') || '';
+        await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'approved', remarks }) });
+      }catch(e){}
+      if (window._teacherRefreshPasses) window._teacherRefreshPasses();
+    }
+    window.teacherRejectPass = async function(id){
+      try{
+        await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'rejected' }) });
+      }catch(e){}
+      if (window._teacherRefreshPasses) window._teacherRefreshPasses();
+    }
+
+    function initSearch() {
+      const searchInput = document.getElementById('search-bar');
+      const body = document.getElementById('search-results');
+      if (!searchInput || !body) return;
+      searchInput.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase();
+        const filtered = allStudents.filter(s => s.name?.toLowerCase().includes(q) || s.rollno?.toLowerCase().includes(q));
+        body.innerHTML = filtered.map(s => `
+            <tr class="cursor-pointer hover:bg-white/5" onclick="openStudentDetails(${s.id})">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-on-dark">${s.name}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm muted-on-dark">${s.rollno}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm"><button class="text-blue-400 hover:underline">Details</button></td>
+            </tr>
+          `).join('') || `<tr><td colspan="3" class="px-6 py-4 text-center muted-on-dark">No students found</td></tr>`;
+      });
+    }
+
+    window.openStudentDetails = function(id) {
+      const student = allStudents.find(s => s.id == id);
+      if (!student) return;
+      const fields = [
+        ["reg_no","Reg No"],["rollno","Roll No"],["name","Name"],["dob","DOB"],["gender","Gender"],["aadhar","Aadhar"],
+        ["student_mobile","Student Mobile"],["blood_group","Blood Group"],["parent_name","Parent Name"],["parent_mobile","Parent Mobile"],
+        ["address","Address"],["nationality","Nationality"],["religion","Religion"],["community","Community"],["caste","Caste"],
+        ["day_scholar_or_hosteller","Day Scholar/Hosteller"],["current_semester","Class/Semester"],["seat_type","Seat Type"],
+        ["quota_type","Quota Type"],["email","Email"],["pmss","PMSS"],["remarks","Remarks"],["bus_no","Bus No"],
+        ["outside_staying_address","Outstaying Address"],["hosteller_room_no","Room No"],["owner_ph_no","Owner's Phone"]
+      ];
+      document.getElementById('student-details').innerHTML = fields.map(([key, label]) => 
+        `<p><strong class="font-semibold text-gray-300">${label}:</strong> ${student[key] || '-'}</p>`
+      ).join('');
+      studentModal.classList.remove('hidden');
+    }
+
+    async function changePassword() {
+      const newPass = document.getElementById('new-password').value.trim();
+      const msg = document.getElementById('password-message');
+      if (!newPass) {
+        msg.textContent = "Password cannot be empty.";
+        msg.className = "text-red-400 text-sm mt-2";
+        return;
+      }
+      try {
+        const res = await fetch('/reset_teacher_password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: newPass })
+        });
+        const result = await res.json();
+        msg.textContent = result.message;
+        msg.className = result.success ? "text-green-400 text-sm mt-2" : "text-red-400 text-sm mt-2";
+        if (result.success) document.getElementById('new-password').value = '';
+      } catch (err) {
+        msg.textContent = "Error changing password.";
+        msg.className = "text-red-400 text-sm mt-2";
+      }
+    }
+
+    // Initial Load
+    loadStudents().then(() => {
+        handleNavigation('dashboard');
+    });
+});
+</script>
+</body>
+</html>

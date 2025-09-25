@@ -1,0 +1,11 @@
+# Flask and dependencies
+Flask
+Werkzeug
+# Google Sheets API
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+httplib2
+gspread
+openpyxl

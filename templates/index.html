@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Class_Connect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-animated {
+            background: radial-gradient(1200px 600px at 10% 10%, rgba(59,130,246,.15), transparent 40%),
+                        radial-gradient(1000px 500px at 90% 20%, rgba(99,102,241,.12), transparent 35%),
+                        radial-gradient(900px 500px at 30% 90%, rgba(34,197,94,.12), transparent 40%),
+                        linear-gradient(135deg, #0f172a, #111827 45%, #0b1220);
+            animation: floatBg 18s ease-in-out infinite alternate;
+            min-height: 100vh;
+        }
+        @keyframes floatBg { to { background-position: 5% 0, 95% 25%, 35% 95%, 100% 100%; } }
+        .glass {
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.18);
+            box-shadow: 0 20px 60px rgba(0,0,0,.25);
+        }
+        .card-3d { transition: transform .15s ease, box-shadow .2s ease; will-change: transform; }
+        .card-3d:hover { transform: translateY(-6px) scale(1.02) rotateX(3deg) rotateY(-3deg); box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+        .tab-active { 
+            background-image: linear-gradient(135deg, rgba(139,92,246,0.95), rgba(236,72,153,0.95));
+            color: white; 
+            box-shadow: 0 12px 30px rgba(236, 72, 153, .35), 0 6px 14px rgba(99,102,241,.25);
+            border: 1px solid rgba(255,255,255,.25);
+        }
+        .tab-inactive {
+            background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+            color: #e5e7eb;
+            border: 1px solid rgba(255,255,255,.18);
+        }
+        .input-icon { position: absolute; inset: 0; width: 44px; display: grid; place-items: center; color: #9ca3af; }
+        .input-base { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); color: #e5e7eb; }
+        .input-base::placeholder { color: #9ca3af; }
+        .input-base:focus { outline: none; border-color: rgba(236, 72, 153,.6); box-shadow: 0 0 0 4px rgba(236, 72, 153,.15); }
+        /* Role tabs refinement */
+        .tab-button { height: 64px; line-height: 1; transition: transform .12s ease, box-shadow .2s ease; }
+        .tab-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.25); }
+        .tab-button:focus { outline: none; box-shadow: 0 0 0 3px rgba(236,72,153,.35); }
+        /* default handled by Tailwind utility classes below */
+    </style>
+</head>
+<body class="bg-[#0f172a]">
+
+<div id="vanta-bg" class="fixed top-0 left-0 w-full h-full z-0"></div>
+
+<div class="min-h-screen flex items-center justify-center p-4 relative z-10">
+    <div class="max-w-md w-full glass rounded-3xl overflow-hidden p-8 card-3d">
+
+        <div class="flex justify-center mb-6">
+            <img src="{{ url_for('static', filename='images/logo-01.png') }}" alt="Class_Connect Logo" class="h-25 w-auto drop-shadow-lg">
+        </div>
+
+        <div class="flex flex-col items-center justify-center gap-2 mb-2">
+          <h2 class="text-3xl font-bold text-white text-center">CLASS CONNECT</h2>
+          <p class="text-slate-300 text-center">Choose your sign-in role to continue</p>
+          <div class="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-300 mt-1">
+            <span class="px-2 py-1 bg-white/10 rounded-full">Attendance</span>
+            <span class="px-2 py-1 bg-white/10 rounded-full">Student Info</span>
+            <span class="px-2 py-1 bg-white/10 rounded-full">Departments</span>
+            <span class="px-2 py-1 bg-white/10 rounded-full">Courses</span>
+          </div>
+        </div>
+
+        <div id="tabs" class="mt-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button id="admin-tab" class="tab-button tab-active p-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-inner ring-1 ring-white/20" data-role="staff" style="min-height:64px;">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Admin</span>
+                </button>
+                <button id="teacher-tab" class="tab-button tab-inactive p-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-inner ring-1 ring-white/20" data-role="staff" style="min-height:64px;">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                    <span>Teacher</span>
+                </button>
+                <button id="student-tab" class="tab-button tab-inactive p-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-inner ring-1 ring-white/20" data-role="student" style="min-height:64px;">
+                    <i class="fa-solid fa-user-graduate"></i>
+                    <span>Student</span>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <button id="principal-tab" class="tab-button tab-inactive p-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-inner ring-1 ring-white/20" data-role="staff" style="min-height:64px;">
+                    <i class="fa-solid fa-crown"></i>
+                    <span>Principal</span>
+                </button>
+                <button id="hod-tab" class="tab-button tab-inactive p-3 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-inner ring-1 ring-white/20" data-role="staff" style="min-height:64px;">
+                    <i class="fa-solid fa-user-tie"></i>
+                    <span>HOD</span>
+                </button>
+            </div>
+        </div>
+
+        <form id="login-form" method="POST" class="mt-6 space-y-5">
+            <div class="relative">
+                <span class="input-icon"><i class="fa-regular fa-user"></i></span>
+                <input id="username" name="username" type="text" placeholder="Username" class="input-base w-full pl-12 pr-4 py-3 rounded-xl" required>
+            </div>
+
+            <div class="relative">
+                <span class="input-icon"><i class="fa-solid fa-lock"></i></span>
+                <input id="password" name="password" type="password" placeholder="Password" class="input-base w-full pl-12 pr-4 py-3 rounded-xl" required>
+            </div>
+
+            <div class="flex items-center justify-between min-h-[20px]">
+                {% if error %}
+                <div id="login-message" class="text-red-400 text-sm">{{ error }}</div>
+                {% else %}
+                <div id="login-message" class="text-red-400 text-sm"></div>
+                {% endif %}
+            </div>
+
+            <div>
+                <button type="submit" class="w-full py-3 px-4 text-lg font-semibold rounded-xl text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 focus:ring-offset-slate-900 transition-all duration-300">
+                    Sign In
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-6 text-center text-sm text-slate-400">
+          <span class="inline-flex items-center gap-2"><i class="fa-solid fa-shield"></i> Secured login • Class_Connect</span>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+<script>
+    VANTA.NET({
+        el: "#vanta-bg",
+        mouseControls: true,
+        touchControls: true,
+        gyroControls: false,
+        minHeight: 200.00,
+        minWidth: 200.00,
+        scale: 1.00,
+        scaleMobile: 1.00,
+        color: 0xec4899,
+        backgroundColor: 0x2a104f,
+        points: 10.00,
+        maxDistance: 25.00,
+        spacing: 18.00
+    });
+
+    const tabsContainer = document.getElementById('tabs');
+    const tabButtons = tabsContainer.querySelectorAll('.tab-button');
+    const loginForm = document.getElementById('login-form');
+    loginForm.action = "{{ url_for('staff_login') }}";
+
+    tabsContainer.addEventListener('click', (event) => {
+        const clickedTab = event.target.closest('.tab-button');
+        if (!clickedTab) return;
+        const role = clickedTab.dataset.role;
+        tabButtons.forEach(button => { button.classList.remove('tab-active'); button.classList.add('tab-inactive'); });
+        clickedTab.classList.add('tab-active');
+        clickedTab.classList.remove('tab-inactive');
+        if (role === 'student') { loginForm.action = "{{ url_for('student_login') }}"; }
+        else { loginForm.action = "{{ url_for('staff_login') }}"; }
+    });
+</script>
+
+</body>
+</html>
