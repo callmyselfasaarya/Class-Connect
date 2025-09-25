@@ -270,10 +270,14 @@
     }
 
     function renderTable(){
-      const cols = [ {key:'id',label:'ID'},{key:'reg_no',label:'Reg No'},{key:'rollno',label:'Roll No'},{key:'name',label:'Name'},{key:'current_semester',label:'Class/Sem'} ];
+  const cols = [ {key:'id',label:'ID'},{key:'reg_no',label:'Reg No'},{key:'rollno',label:'Roll No'},{key:'name',label:'Name'},{key:'current_semester',label:'Class/Sem'} ];
       const hdr = document.getElementById('hdr'); const body = document.getElementById('body'); if (!hdr||!body) return;
       hdr.innerHTML = cols.map(c=>`<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">${c.label}</th>`).join('');
-      body.innerHTML = allStudents.map(s=>`<tr class="border-b border-white/5 hover:bg-white/5">${cols.map(c=>`<td class=\"px-3 py-2 text-[12px] truncate align-top\" title=\"${s[c.key]||''}\">${s[c.key]||''}</td>`).join('')}</tr>`).join('');
+      body.innerHTML = allStudents.map(s=>`<tr class="border-b border-white/5 hover:bg-white/5">${cols.map(c=>{
+        let val = s[c.key] || '';
+        if (c.key === 'scholarship') val = s.scholarship || s.remarks || '';
+        return `<td class=\"px-3 py-2 text-[12px] truncate align-top" title=\"${val}\">${val}</td>`;
+      }).join('')}</tr>`).join('');
     }
 
     async function populateHodDeptSelect(){

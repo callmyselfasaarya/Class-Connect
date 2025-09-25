@@ -339,6 +339,33 @@ def ensure_default_teacher():
         conn.commit()
 
 ensure_default_teacher()
+
+# Create class-specific admin accounts for AIML and IT (idempotent)
+def ensure_class_admins():
+    # Each will be a row in teachers with role='admin'
+    defaults = [
+        {"teacher_name": "AIML Admin", "department": "AIML", "user_id": "admin_aiml", "pass": "aiml@123"},
+        {"teacher_name": "IT Admin",   "department": "IT",   "user_id": "admin_it",   "pass": "it@123"},
+    ]
+    for d in defaults:
+        try:
+            c.execute("SELECT 1 FROM teachers WHERE user_id=?", (d["user_id"],))
+            if not c.fetchone():
+                c.execute(
+                    """
+                    INSERT INTO teachers (teacher_name, department, user_id, pass_hash, pass_plain, role)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        d["teacher_name"], d["department"], d["user_id"],
+                        generate_password_hash(d["pass"]), d["pass"], 'admin'
+                    )
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"ensure_class_admins: failed for {d['user_id']}: {e}")
+
+ensure_class_admins()
 # --- HELPER FUNCTIONS ---
 def generate_user_id(rollno):
     return f"stu{rollno}"
@@ -366,12 +393,45 @@ def _find_credentials_file():
 
 GOOGLE_CREDENTIALS_FILE = _find_credentials_file()
 # Defaults wired to provided sheet links; override with env vars if needed
+# Backward-compatible single-sheet config
 STUDENTS_SHEET_ID = os.environ.get("STUDENTS_SHEET_ID", "11-fZZNhO7MzKaThXLgyqqV_L5gJcjXC9yc7iWlp3fCo")
 ATTENDANCE_SHEET_ID = os.environ.get("ATTENDANCE_SHEET_ID", "1OgLsxcweN2xBo1okhKaeCN2D1PGwmCd50kxEFXHohnM")
 # Ranges can be either a tab name (entire tab) or A1 range like 'Sheet1!A:F'.
 # Default to your actual tab names from the Google Sheets
 STUDENTS_RANGE = os.environ.get("STUDENTS_RANGE", "Student_Details!A:AZ")
 ATTENDANCE_RANGE = os.environ.get("ATTENDANCE_RANGE", "attendance!A:ZZ")
+
+# New multi-sheet JSON configurations (preferred):
+# Example:
+#   STUDENTS_SHEETS_JSON='[{"id":"AIML_ID","range":"Student_Details!A:AZ"},{"id":"IT_ID","range":"STUDENT IT III!A:AZ"}]'
+#   ATTENDANCE_SHEETS_JSON='[{"id":"AIML_ATT_ID","range":"attendance!A:ZZ"},{"id":"IT_ATT_ID","range":"IT ATTENDANCE III!A:ZZ"}]'
+def _parse_sheets_json(env_key, fallback_id, fallback_range):
+    raw = os.environ.get(env_key, "").strip()
+    if not raw:
+        # Provide built-in fallback that also includes user's IT sheets if env not set
+        try:
+            # User-provided IT sheets from request description
+            it_att_id = "1dklKH7KY3g0Zy92axIrXE1qIdEMSQvFxPnyLL-LqYnY"
+            it_stu_id = "1p1aog2h0sTvk4wsc4G_Q4Pch4uSIzTF4LOe7qfnUj6k"
+            return [
+                {"id": fallback_id, "range": fallback_range},
+                {"id": it_stu_id if 'STUDENTS' in env_key else it_att_id,
+                 "range": ("STUDENT IT III!A:AZ" if 'STUDENTS' in env_key else "IT ATTENDANCE III!A:ZZ")}
+            ]
+        except Exception:
+            return [{"id": fallback_id, "range": fallback_range}]
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list) and all(isinstance(x, dict) and 'id' in x for x in data):
+            # ensure range fallback
+            for x in data:
+                if 'range' not in x or not str(x['range']).strip():
+                    x['range'] = fallback_range
+            return data
+    except Exception:
+        pass
+    # If JSON invalid, fallback to single-sheet envs
+    return [{"id": fallback_id, "range": fallback_range}]
 # Local Excel fallbacks
 STUDENTS_XLSX = os.environ.get("STUDENTS_XLSX", os.path.join(os.getcwd(), "students.xlsx"))
 ATTENDANCE_XLSX = os.environ.get("ATTENDANCE_XLSX", os.path.join(os.getcwd(), "attendance.xlsx"))
@@ -412,7 +472,7 @@ def get_sheets_service():
     return _sheets_service
 
 def _split_ids(ids: str):
-    # Allow comma-separated multiple spreadsheet IDs
+    # Allow comma-separated multiple spreadsheet IDs (legacy)
     return [s.strip() for s in str(ids or "").split(',') if s.strip()]
 
 def read_sheet_values(spreadsheet_id, a1_range):
@@ -452,24 +512,43 @@ def read_excel_values(xlsx_path):
 
 def load_students_from_gsheets():
     global _last_students_sync_ts
-    if not STUDENTS_SHEET_ID:
-        return
-    # Merge rows from all provided sheet IDs (first row of the first sheet is treated as headers)
+    # Prefer JSON multi-sheet config
+    sheets_cfg = _parse_sheets_json(
+        'STUDENTS_SHEETS_JSON', STUDENTS_SHEET_ID, STUDENTS_RANGE
+    ) if (os.environ.get('STUDENTS_SHEETS_JSON') or '').strip() or True else None
+
     merged = []
     headers = None
-    for sid in _split_ids(STUDENTS_SHEET_ID):
-        try:
-            vals = read_sheet_values(sid, STUDENTS_RANGE)
-        except Exception as e:
-            print(f"Error reading student sheet values for sheet ID {sid}: {e}")
-            continue
-        if not vals:
-            print(f"No values returned for student sheet ID {sid}")
-            continue
-        if headers is None:
-            headers = vals[0]
-        # append data rows
-        merged.extend(vals[1:])
+    if sheets_cfg:
+        for entry in sheets_cfg:
+            sid = entry.get('id')
+            rng = entry.get('range') or STUDENTS_RANGE
+            try:
+                vals = read_sheet_values(sid, rng)
+            except Exception as e:
+                print(f"Error reading student sheet values for sheet ID {sid}: {e}")
+                continue
+            if not vals:
+                print(f"No values returned for student sheet ID {sid}")
+                continue
+            if headers is None:
+                headers = vals[0]
+            merged.extend(vals[1:])
+    else:
+        if not STUDENTS_SHEET_ID:
+            return
+        for sid in _split_ids(STUDENTS_SHEET_ID):
+            try:
+                vals = read_sheet_values(sid, STUDENTS_RANGE)
+            except Exception as e:
+                print(f"Error reading student sheet values for sheet ID {sid}: {e}")
+                continue
+            if not vals:
+                print(f"No values returned for student sheet ID {sid}")
+                continue
+            if headers is None:
+                headers = vals[0]
+            merged.extend(vals[1:])
     if not headers:
         print("No student data found in Google Sheet.")
         return
@@ -872,22 +951,46 @@ def load_attendance_from_gsheets():
 
     merged = []
     headers = None
-    for sid in _split_ids(ATTENDANCE_SHEET_ID):
-        print(f"[DEBUG] Processing sheet ID: {sid}")
-        try:
-            vals = read_sheet_values(sid, ATTENDANCE_RANGE)
-            print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet")
-            if not vals:
-                print(f"[WARNING] No values returned for sheet ID: {sid}")
+    att_cfg = _parse_sheets_json(
+        'ATTENDANCE_SHEETS_JSON', ATTENDANCE_SHEET_ID, ATTENDANCE_RANGE
+    ) if (os.environ.get('ATTENDANCE_SHEETS_JSON') or '').strip() or True else None
+
+    if att_cfg:
+        for entry in att_cfg:
+            sid = entry.get('id')
+            rng = entry.get('range') or ATTENDANCE_RANGE
+            print(f"[DEBUG] Processing sheet ID: {sid} range: {rng}")
+            try:
+                vals = read_sheet_values(sid, rng)
+                print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet")
+                if not vals:
+                    print(f"[WARNING] No values returned for sheet ID: {sid}")
+                    continue
+                if headers is None and vals:
+                    headers = [str(h).strip() for h in vals[0]]
+                    print(f"[DEBUG] Headers found: {headers[:10]}...")
+                merged.extend(vals[1:])
+                print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
+            except Exception as e:
+                print(f"[ERROR] Failed to read sheet {sid}: {e}")
                 continue
-            if headers is None and vals:
-                headers = [str(h).strip() for h in vals[0]]
-                print(f"[DEBUG] Headers found: {headers[:10]}...")  # Show first 10 headers
-            merged.extend(vals[1:])
-            print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
-        except Exception as e:
-            print(f"[ERROR] Failed to read sheet {sid}: {e}")
-            continue
+    else:
+        for sid in _split_ids(ATTENDANCE_SHEET_ID):
+            print(f"[DEBUG] Processing sheet ID: {sid}")
+            try:
+                vals = read_sheet_values(sid, ATTENDANCE_RANGE)
+                print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet")
+                if not vals:
+                    print(f"[WARNING] No values returned for sheet ID: {sid}")
+                    continue
+                if headers is None and vals:
+                    headers = [str(h).strip() for h in vals[0]]
+                    print(f"[DEBUG] Headers found: {headers[:10]}...")  # Show first 10 headers
+                merged.extend(vals[1:])
+                print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
+            except Exception as e:
+                print(f"[ERROR] Failed to read sheet {sid}: {e}")
+                continue
     
     if not headers or not merged:
         print("[ERROR] No attendance data found in Google Sheet.")
@@ -1030,7 +1133,7 @@ def load_attendance_from_excel():
 # Initial data load: Google Sheets only
 # Note: Passwords are only generated for NEW students, existing students keep their current passwords
 try:
-    if not USE_EXCEL_ONLY and STUDENTS_SHEET_ID:
+    if not USE_EXCEL_ONLY and (STUDENTS_SHEET_ID or os.environ.get('STUDENTS_SHEETS_JSON')):
         load_students_from_gsheets()
 except Exception as e:
     print("Error loading students:", e)
@@ -1041,7 +1144,7 @@ except Exception as e:
         print("Excel load students failed:", e2)
 
 try:
-    if not USE_EXCEL_ONLY and ATTENDANCE_SHEET_ID:
+    if not USE_EXCEL_ONLY and (ATTENDANCE_SHEET_ID or os.environ.get('ATTENDANCE_SHEETS_JSON')):
         load_attendance_from_gsheets()
 except Exception as e:
     print("Error loading attendance:", e)
@@ -1409,6 +1512,8 @@ def staff_login():
             return redirect(url_for('hod_dashboard'))
         if role == 'principal':
             return redirect(url_for('principal_dashboard'))
+        if role == 'admin':
+            return redirect(url_for('admin_dashboard'))
         return redirect(url_for('teacher_dashboard'))
 
     return render_template('index.html', error="Invalid staff credentials")

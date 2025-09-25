@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { key: 'community', label: 'Community' }, { key: 'caste', label: 'Caste' },
         { key: 'day_scholar_or_hosteller', label: 'Day Scholar/Hosteller' }, { key: 'current_semester', label: 'Class/Semester' },
         { key: 'seat_type', label: 'Seat Type' }, { key: 'quota_type', label: 'Quota Type' }, { key: 'email', label: 'Email' },
-        { key: 'pmss', label: 'PMSS' }, { key: 'remarks', label: 'Remarks' }, { key: 'bus_no', label: 'Bus No' },
+        { key: 'pmss', label: 'PMSS' }, { key: 'scholarship', label: 'Scholarship' }, { key: 'bus_no', label: 'Bus No' },
         { key: 'outside_staying_address', label: 'Outstaying Address' }, { key: 'hosteller_room_no', label: 'Room No' },
         { key: 'owner_ph_no', label: "Owner's Phone" }
       ];
@@ -600,7 +600,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!body) return;
       body.innerHTML = data.map(s => `
         <tr class="border-b border-white/5 hover:bg-white/5">
-          ${columns.map(col => `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[col.key] || ''}">${s[col.key] || ''}</td>`).join('')}
+          ${columns.map(col => {
+            if (col.key === 'scholarship') {
+              return `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s.scholarship || ''}">${s.scholarship || '-'}</td>`;
+            } else {
+              return `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[col.key] || ''}">${s[col.key] || ''}</td>`;
+            }
+          }).join('')}
         </tr>
       `).join('');
     }

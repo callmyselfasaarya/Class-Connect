@@ -712,7 +712,7 @@
         ["seat_type", "Seat Type", "fa-chair"],
         ["quota_type", "Quota Type", "fa-ticket"],
         ["pmss", "PMSS", "fa-check-circle"],
-        ["remarks", "Remarks", "fa-note-sticky"],
+        ["scholarship", "Scholarship", "fa-award"],
         ["bus_no", "Bus No", "fa-bus"],
         ["hosteller_room_no", "Room No", "fa-bed"],
         ["outside_staying_address", "Outside Staying Address", "fa-map-location-dot"],
@@ -737,7 +737,12 @@
       const gridHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
           ${infoItems.map(([key,label,icon])=>{
-            const value = student[key] || '-';
+            let value = student[key] || '-';
+            if (key === 'scholarship') {
+              value = student.scholarship || student.remarks || '-';
+            }
+            // Hide remarks if scholarship is present
+            if (key === 'remarks' && (student.scholarship || student.remarks)) return '';
             return `
               <div class="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow transition">
                 <div class="flex items-start gap-3">
