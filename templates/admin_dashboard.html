@@ -541,7 +541,7 @@ async function loadAllStudents() {
       { key: 'quota_type', label: 'Quota Type', width: 'w-28' },
       { key: 'email', label: 'Email', width: 'w-60' },
       { key: 'pmss', label: 'PMSS', width: 'w-24' },
-      { key: 'remarks', label: 'Remarks', width: 'w-40' },
+      { key: 'scholarship', label: 'Scholarship', width: 'w-40' },
       { key: 'bus_no', label: 'Bus No', width: 'w-24' },
       { key: 'outside_staying_address', label: 'Outstaying Address', width: 'w-60' },
       { key: 'hosteller_room_no', label: 'Room No', width: 'w-24' },
@@ -566,6 +566,10 @@ async function loadAllStudents() {
         }
         if (col.key === 'outside_staying_address') {
           value = s.outside_staying_address || '';
+        }
+        // Show scholarship details instead of remarks
+        if (col.key === 'scholarship') {
+          value = s.scholarship || s.remarks || '';
         }
         const displayValue = value === 'null' || value === 'undefined' ? '' : value;
         return `<td class="px-3 py-2 text-[12px] ${col.width} truncate align-top" title="${displayValue}">${displayValue}</td>`;
