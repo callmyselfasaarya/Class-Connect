@@ -236,28 +236,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allStudents = [];
 
+    // Pass department and attendance data from Flask
+    const teacherDepartment = {{ department|tojson|safe }} || 'All';
+    const todayAbsent = {{ today_absent|tojson|safe }} || [];
+    const lowAttendance = {{ low_attendance|tojson|safe }} || [];
+    const departmentStudents = {{ department_students|tojson|safe }} || [];
+    // Initialize the working dataset with department-specific students so View table renders rows
+    allStudents = Array.isArray(departmentStudents) ? departmentStudents : [];
+    
     // Content Templates
     const welcomeContent = `
     <div class="space-y-6">
+      <div class="glass-dark neon-border p-6 mb-4">
+        <h1 class="text-2xl font-bold text-white mb-2">${teacherDepartment} Department - Teacher Dashboard</h1>
+        <p class="text-gray-300">Total Students: ${departmentStudents.length}</p>
+      </div>
+      
       <div class="glass-dark neon-border p-6">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-lg font-bold text-on-dark">Daily Absent Students</h2>
-          <span id="teacher-absent-count" class="text-sm text-red-400 font-semibold"></span>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-on-dark">Today's Absent Students</h2>
+          <span id="teacher-absent-count" class="text-sm text-red-400 font-semibold">${todayAbsent.length} absent</span>
         </div>
         <div id="teacher-absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
-          <div class="muted-on-dark">Loading absent students...</div>
+          ${todayAbsent.length > 0 ? 
+            todayAbsent.map(s => `
+              <div class="p-2 bg-white/5 rounded hover:bg-white/10 transition-colors">
+                <span class="font-medium">${s.rollno}</span> - 
+                <span class="text-gray-300">${s.name || 'Name not available'}</span>
+              </div>
+            `).join('') : 
+            '<div class="muted-on-dark">No absent students today</div>'
+          }
         </div>
         <div class="mt-3 text-xs muted-on-dark">Updated from Google Sheets attendance data</div>
       </div>
       
       <div class="glass-dark neon-border p-6">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-lg font-bold text-on-dark">Low Attendance Alert</h2>
-          <span id="low-attn-count" class="text-sm muted-on-dark"></span>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-on-dark">Low Attendance Alert (&lt; 75%)</h2>
+          <span id="low-attn-count" class="text-sm text-yellow-400 font-semibold">${lowAttendance.length} students</span>
         </div>
-        <ul id="announcements-list" class="list-disc pl-5 space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
-          <li class="muted-on-dark">Loading announcements...</li>
-        </ul>
+        <div id="low-attendance-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+          ${lowAttendance.length > 0 ? 
+            lowAttendance.map(s => `
+              <div class="p-3 bg-white/5 rounded hover:bg-white/10 transition-colors border-l-4 border-yellow-500">
+                <div class="flex justify-between items-center">
+                  <div>
+                    <span class="font-medium">${s.rollno}</span> - 
+                    <span class="text-gray-300">${s.name || 'Name not available'}</span>
+                  </div>
+                  <span class="text-sm font-bold ${s.attendance < 50 ? 'text-red-500' : 'text-yellow-500'}">
+                    ${s.attendance}%
+                  </span>
+                </div>
+              </div>
+            `).join('') : 
+            '<div class="muted-on-dark">No students with low attendance</div>'
+          }
+        </div>
       </div>
     </div>
     `;
@@ -590,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { key: 'seat_type', label: 'Seat Type' }, { key: 'quota_type', label: 'Quota Type' }, { key: 'email', label: 'Email' },
         { key: 'pmss', label: 'PMSS' }, { key: 'scholarship', label: 'Scholarship' }, { key: 'bus_no', label: 'Bus No' },
         { key: 'outside_staying_address', label: 'Outstaying Address' }, { key: 'hosteller_room_no', label: 'Room No' },
-        { key: 'owner_ph_no', label: "Owner's Phone" }
+        { key: 'owner_ph_no', label: "Owner's Phone" }, { key: '__actions', label: 'Actions' }
       ];
       const headerRow = document.getElementById('teacher-student-table-header');
       if (headerRow) {
@@ -603,12 +639,118 @@ document.addEventListener('DOMContentLoaded', () => {
           ${columns.map(col => {
             if (col.key === 'scholarship') {
               return `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s.scholarship || ''}">${s.scholarship || '-'}</td>`;
+            } else if (col.key === '__actions') {
+              const r = (s.rollno || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+              return `<td class="px-3 py-2 text-[12px] truncate align-top">
+                        <button class="px-2 py-1 bg-purple-600 text-white rounded text-xs" onclick="openGiveOP('${r}')">Give Out Pass</button>
+                      </td>`;
             } else {
               return `<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[col.key] || ''}">${s[col.key] || ''}</td>`;
             }
           }).join('')}
         </tr>
       `).join('');
+    }
+
+    // Slide-over panel to create Out Pass for a student (teacher/advisor)
+    window.openGiveOP = function(rollno){
+      const student = (allStudents||[]).find(x => String(x.rollno||'') === String(rollno||''));
+      const name = student?.name || '';
+      const dept = student?.current_semester || '';
+      const rootId = 'op-slide-root';
+      if (document.getElementById(rootId)) document.getElementById(rootId).remove();
+      const html = `
+        <div id="${rootId}" class="fixed inset-0 z-50">
+          <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('${rootId}').remove()"></div>
+          <div class="absolute top-0 right-0 h-full w-full max-w-md bg-[#1f2033] text-white shadow-2xl overflow-y-auto">
+            <div class="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 class="text-lg font-semibold">Give Out Pass</h3>
+              <button class="text-white/70 hover:text-white" onclick="document.getElementById('${rootId}').remove()">✕</button>
+            </div>
+            <div class="p-4 space-y-3">
+              <div class="text-sm text-white/80">Name: <span class="font-semibold">${name}</span></div>
+              <div class="text-sm text-white/80">Roll No: <span class="font-semibold">${rollno}</span></div>
+              <div class="text-sm text-white/80">Department: <span class="font-semibold">${dept}</span></div>
+              <div>
+                <label class="text-xs text-white/70">Type</label>
+                <select id="tch-op-type" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
+                  <option value="out_pass">Out Pass</option>
+                  <option value="od_pass">OD Pass</option>
+                  <option value="emergency">Emergency</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-white/70">Reason</label>
+                <input id="tch-op-reason" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="Reason" />
+              </div>
+              <div id="tch-op-fromto">
+                <label class="text-xs text-white/70">From / To</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input id="tch-op-from" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+                  <input id="tch-op-to" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+                </div>
+              </div>
+              <div id="tch-od-extra" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="text-xs text-white/70">OD Duration</label>
+                  <select id="tch-od-duration" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
+                    <option value="half_day">Half Day</option>
+                    <option value="full_day">Full Day</option>
+                    <option value="n_days">N Days</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs text-white/70">No. of days</label>
+                  <input id="tch-od-days" type="number" min="1" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+                </div>
+              </div>
+              <div id="tch-other-extra" class="hidden">
+                <label class="text-xs text-white/70">Hours/Time</label>
+                <input id="tch-other-hours" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="e.g. 3 hours" />
+              </div>
+              <div class="pt-2">
+                <button class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded" onclick="submitTeacherOP('${rollno}')">Create</button>
+                <span id="tch-op-msg" class="text-sm ml-3"></span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+      // toggle extra fields based on type
+      const typeSel = document.getElementById('tch-op-type');
+      const fromTo = document.getElementById('tch-op-fromto');
+      const odExtra = document.getElementById('tch-od-extra');
+      const otherExtra = document.getElementById('tch-other-extra');
+      const updateExtras = () => {
+        const t = typeSel.value;
+        odExtra.classList.add('hidden');
+        otherExtra.classList.add('hidden');
+        fromTo.classList.remove('hidden');
+        if (t === 'od_pass') { odExtra.classList.remove('hidden'); }
+        if (t === 'other') { otherExtra.classList.remove('hidden'); }
+      };
+      typeSel.onchange = updateExtras; updateExtras();
+    }
+
+    window.submitTeacherOP = async function(rollno){
+      const msg = document.getElementById('tch-op-msg');
+      try{
+        const payload = {
+          rollno: rollno,
+          pass_type: document.getElementById('tch-op-type').value,
+          reason: document.getElementById('tch-op-reason').value,
+          from_datetime: document.getElementById('tch-op-from').value,
+          to_datetime: document.getElementById('tch-op-to').value,
+          od_duration: document.getElementById('tch-od-duration')?.value || '',
+          od_days: Number(document.getElementById('tch-od-days')?.value || 0),
+          other_hours: document.getElementById('tch-other-hours')?.value || ''
+        };
+        const res = await fetch('/out_pass/teacher_create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success){ msg.textContent = 'Out pass created'; msg.className = 'text-green-300 text-sm'; setTimeout(()=>{ const r=document.getElementById('op-slide-root'); if(r) r.remove(); }, 800); }
+        else { msg.textContent = data.message||'Failed'; msg.className = 'text-red-300 text-sm'; }
+      }catch(e){ msg.textContent = 'Error'; msg.className = 'text-red-300 text-sm'; }
     }
 
     async function initTeacherPasses(){

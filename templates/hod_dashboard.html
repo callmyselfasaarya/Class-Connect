@@ -55,7 +55,6 @@
       <nav class="sidebar-content px-2">
         <button class="sidebar-button" data-page="dashboard"><i class="fas fa-home"></i><span class="label">Dashboard</span></button>
         <button class="sidebar-button" data-page="attendance"><i class="fas fa-chart-line"></i><span class="label">Attendance</span></button>
-        <button class="sidebar-button" data-page="daily-absent"><i class="fas fa-user-minus"></i><span class="label">Daily Absent</span></button>
         <button class="sidebar-button" data-page="view"><i class="fas fa-users"></i><span class="label">Department Students</span></button>
         <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Course List</span></button>
         <button class="sidebar-button" data-page="passes"><i class="fas fa-ticket"></i><span class="label">Out Pass Approvals</span></button>
@@ -77,23 +76,94 @@
   document.addEventListener('DOMContentLoaded', () => {
     VANTA.NET({ el: "#vanta-bg", mouseControls: true, touchControls: true, gyroControls: false, minHeight: 200.00, minWidth: 200.00, scale: 1.00, scaleMobile: 1.00, color: 0xec4899, backgroundColor: 0x2a104f, points: 10.00, maxDistance: 25.00, spacing: 18.00 });
 
-    let allStudents = [];
+    // Pass department and attendance data from Flask
+    const hodDepartment = {{ department|tojson|safe }} || 'All';
+    const todayAbsent = {{ today_absent|tojson|safe }} || [];
+    const lowAttendance = {{ low_attendance|tojson|safe }} || [];
+    const departmentStudents = {{ department_students|tojson|safe }} || [];
+    const hostellers = {{ hostellers|tojson|safe }} || [];
+    const dayScholars = {{ day_scholars|tojson|safe }} || [];
+    const outstayingStudents = {{ outstaying_students|tojson|safe }} || [];
+    const itCount = {{ it_count|tojson|safe }} || 0;
+    const aimlCount = {{ aiml_count|tojson|safe }} || 0;
+    
+    let allStudents = departmentStudents;
 
     const dashboardContent = `
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="space-y-6">
         <div class="glass-dark neon-border p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-lg font-bold text-on-dark">Today's Absent (Department)</h2>
-            <span id="absent-count" class="text-sm text-red-400 font-semibold"></span>
+          <h1 class="text-2xl font-bold text-white mb-2">${hodDepartment} Department - HOD Dashboard</h1>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-blue-400">${departmentStudents.length}</div>
+              <div class="text-sm text-gray-400">Total Students</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-pink-400">${aimlCount}</div>
+              <div class="text-sm text-gray-400">AI & ML Students</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-indigo-400">${itCount}</div>
+              <div class="text-sm text-gray-400">IT Students</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-green-400">${hostellers.length}</div>
+              <div class="text-sm text-gray-400">Hostellers</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-yellow-400">${dayScholars.length}</div>
+              <div class="text-sm text-gray-400">Day Scholars</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-purple-400">${outstayingStudents.length}</div>
+              <div class="text-sm text-gray-400">Outside Staying</div>
+            </div>
           </div>
-          <div id="absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin"><div class="muted-on-dark">Loading...</div></div>
         </div>
-        <div class="glass-dark neon-border p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-lg font-bold text-on-dark">Low Attendance (&lt; 75%)</h2>
-            <span id="low-count" class="text-sm text-red-400 font-semibold"></span>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-dark neon-border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-on-dark">Today's Absent Students</h2>
+              <span id="absent-count" class="text-sm text-red-400 font-semibold">${todayAbsent.length} absent</span>
+            </div>
+            <div id="absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+              ${todayAbsent.length > 0 ? 
+                todayAbsent.map(s => `
+                  <div class="p-2 bg-white/5 rounded hover:bg-white/10 transition-colors">
+                    <span class="font-medium">${s.rollno}</span> - 
+                    <span class="text-gray-300">${s.name || 'Name not available'}</span>
+                  </div>
+                `).join('') : 
+                '<div class="muted-on-dark">No absent students today</div>'
+              }
+            </div>
           </div>
-          <div id="low-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin"><div class="muted-on-dark">Loading...</div></div>
+          
+          <div class="glass-dark neon-border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-on-dark">Low Attendance Alert (&lt; 75%)</h2>
+              <span id="low-count" class="text-sm text-yellow-400 font-semibold">${lowAttendance.length} students</span>
+            </div>
+            <div id="low-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+              ${lowAttendance.length > 0 ? 
+                lowAttendance.map(s => `
+                  <div class="p-3 bg-white/5 rounded hover:bg-white/10 transition-colors border-l-4 border-yellow-500">
+                    <div class="flex justify-between items-center">
+                      <div>
+                        <span class="font-medium">${s.rollno}</span> - 
+                        <span class="text-gray-300">${s.name || 'Name not available'}</span>
+                      </div>
+                      <span class="text-sm font-bold ${s.attendance < 50 ? 'text-red-500' : 'text-yellow-500'}">
+                        ${s.attendance}%
+                      </span>
+                    </div>
+                  </div>
+                `).join('') : 
+                '<div class="muted-on-dark">No students with low attendance</div>'
+              }
+            </div>
+          </div>
         </div>
       </div>`;
 
@@ -526,5 +596,3 @@
   </script>
 </body>
 </html>
-
-

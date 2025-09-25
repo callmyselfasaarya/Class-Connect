@@ -577,7 +577,18 @@ async function loadAllStudents() {
       return `<tr class="border-b border-white/5 hover:bg-white/5">${cells}<td class="px-3 py-2 text-[12px] w-24 whitespace-nowrap"><div class="flex space-x-1"><button class="text-red-400 hover:text-red-300 hover:underline text-xs" onclick="deleteStudent(${s.id})">Delete</button><button class="text-green-400 hover:text-green-300 hover:underline text-xs" onclick="resetPassword(${s.id})">Reset</button></div></td></tr>`;
     }).join('');
 
-    renderContent(`<div class="container mx-auto"><div class="flex items-center justify-between mb-4"><h2 class="text-2xl font-semibold text-on-dark">All Students</h2><label class="flex items-center space-x-2 muted-on-dark"><input id=\"toggle-all-passwords\" type=\"checkbox\" class=\"form-checkbox\"><span class=\"text-sm\">Show all passwords</span></label></div><div class="glass-dark neon-border overflow-hidden"><div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="min-w-full table-glass"><thead class="sticky top-0 z-10"><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div><div class="mt-4 text-sm muted-on-dark"><p><strong>Total students:</strong> ${students.length}</p></div></div>`);
+    renderContent(`<div class="container mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-semibold text-on-dark">All Students</h2>
+    <div class="flex items-center gap-3">
+      <button id="admin-sync-students-btn" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs" title="Sync from Google Sheets"><i class="fas fa-cloud-download-alt"></i> Sync Students</button>
+      <label class="flex items-center space-x-2 muted-on-dark"><input id=\"toggle-all-passwords\" type=\"checkbox\" class=\"form-checkbox\"><span class=\"text-sm\">Show all passwords</span></label>
+    </div>
+  </div>
+  <div class="glass-dark neon-border overflow-hidden"><div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="min-w-full table-glass"><thead class="sticky top-0 z-10"><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div></div>
+  <div class="mt-4 text-sm muted-on-dark"><p><strong>Total students:</strong> ${students.length}</p></div>
+  <div id="admin-sync-students-msg" class="text-sm mt-2 muted-on-dark"></div>
+</div>`);
 
     // Attach event listener after DOM is updated
     setTimeout(() => {
@@ -587,6 +598,27 @@ async function loadAllStudents() {
           console.log('Toggle all passwords:', e.target.checked);
           toggleAllPasswords(e.target.checked);
         });
+      }
+      const syncBtn = document.getElementById('admin-sync-students-btn');
+      const syncMsg = document.getElementById('admin-sync-students-msg');
+      if (syncBtn) {
+        syncBtn.onclick = async () => {
+          try {
+            syncBtn.disabled = true; syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+            const res = await fetch('/sync_students', { method: 'POST' });
+            const result = await res.json();
+            if (result.success) {
+              if (syncMsg) { syncMsg.textContent = result.message; syncMsg.className = 'text-green-400 text-sm mt-2'; }
+              loadAllStudents();
+            } else {
+              if (syncMsg) { syncMsg.textContent = result.message || 'Sync failed.'; syncMsg.className = 'text-red-400 text-sm mt-2'; }
+            }
+          } catch (err) {
+            if (syncMsg) { syncMsg.textContent = 'Error syncing students.'; syncMsg.className = 'text-red-400 text-sm mt-2'; }
+          } finally {
+            syncBtn.disabled = false; syncBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Sync Students';
+          }
+        };
       }
     }, 100);
   } catch (err) { console.error(err); alert('Error loading students'); }
@@ -640,6 +672,7 @@ async function loadAllTeachers() {
     <div id="add-teacher-msg" class="text-sm muted-on-dark"></div>
   </div>
 </div>`;
+
 
     renderContent(`<div class="container mx-auto">
   <div class="flex items-center justify-between mb-4">
@@ -695,6 +728,7 @@ async function loadAllTeachers() {
           }
         };
       }
+      // Update teacher department handler removed
     }, 100);
   } catch (err) { console.error(err); alert('Error loading teachers'); }
 }

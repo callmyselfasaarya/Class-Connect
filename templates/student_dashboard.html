@@ -497,11 +497,60 @@
         </div>`;
       document.body.insertAdjacentHTML('beforeend', html);
     };
+    // Function to check if out pass time has expired
+    const checkOutPassExpiry = (passes) => {
+      const now = new Date();
+      passes.forEach(p => {
+        if (p.status === 'approved' && p.to_datetime) {
+          const endTime = new Date(p.to_datetime);
+          if (endTime < now) {
+            // Show expiry alert
+            showExpiredPassAlert(p);
+          }
+        }
+      });
+    };
+    
+    // Function to show expired pass alert
+    const showExpiredPassAlert = (pass) => {
+      const alertHtml = `
+        <div class="fixed top-4 right-4 bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse" id="pass-expiry-alert">
+          <div class="flex items-center space-x-3">
+            <i class="fas fa-exclamation-triangle text-2xl"></i>
+            <div>
+              <div class="font-bold text-lg">OUT PASS TIME EXPIRED!</div>
+              <div class="text-sm mt-1">Your ${pass.pass_type} has ended at ${new Date(pass.to_datetime).toLocaleString()}</div>
+              <div class="text-xs mt-2 opacity-90">Please return to campus immediately</div>
+            </div>
+            <button onclick="document.getElementById('pass-expiry-alert').remove()" class="text-white hover:text-red-200 ml-4">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>`;
+      
+      // Remove any existing alerts first
+      const existingAlert = document.getElementById('pass-expiry-alert');
+      if (existingAlert) existingAlert.remove();
+      
+      // Add the new alert
+      document.body.insertAdjacentHTML('beforeend', alertHtml);
+      
+      // Auto-remove after 10 seconds
+      setTimeout(() => {
+        const alert = document.getElementById('pass-expiry-alert');
+        if (alert) alert.remove();
+      }, 10000);
+    };
+    
     const refreshList = async () => {
       try{
         const res = await fetch('/out_pass/my');
         const data = await res.json();
         const rows = (data && data.success && Array.isArray(data.passes)) ? data.passes : [];
+        
+        // Check for expired passes
+        checkOutPassExpiry(rows);
+        
         list.innerHTML = rows.length ? `
           <div class="overflow-x-auto">
             <table class="min-w-full table-glass">
@@ -511,19 +560,27 @@
                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">To</th>
                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Advisor</th>
                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">HOD</th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Final</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
               </tr></thead>
               <tbody>
                 ${rows.map((p,i)=>{
                   const approved = (p.status||'').toLowerCase()==='approved';
+                  const now = new Date();
+                  const endTime = p.to_datetime ? new Date(p.to_datetime) : null;
+                  const isExpired = approved && endTime && endTime < now;
                   const clickable = approved ? 'cursor-pointer hover:bg-white/10' : '';
-                  return `<tr class="border-b border-white/10 ${clickable}" data-index="${i}">
+                  const expiredClass = isExpired ? 'bg-red-900/20' : '';
+                  
+                  return `<tr class="border-b border-white/10 ${clickable} ${expiredClass}" data-index="${i}">
                     <td class="px-3 py-2">${p.pass_type}</td>
                     <td class="px-3 py-2">${p.from_datetime}</td>
                     <td class="px-3 py-2">${p.to_datetime}</td>
                     <td class="px-3 py-2">${p.advisor_status||'-'}</td>
                     <td class="px-3 py-2">${p.hod_status||'-'}</td>
-                    <td class="px-3 py-2">${p.status||'-'}</td>
+                    <td class="px-3 py-2">
+                      ${p.status||'-'}
+                      ${isExpired ? '<span class="ml-2 text-red-400 font-bold text-xs">TIME OVER</span>' : ''}
+                    </td>
                   </tr>`;
                 }).join('')}
               </tbody>
@@ -560,6 +617,11 @@
       }catch(e){ msg.textContent = 'Error submitting'; msg.className = 'text-red-300 text-sm mt-2'; }
     } }
     refreshList();
+    
+    // Check for expired passes every minute
+    setInterval(() => {
+      refreshList();
+    }, 60000); // Check every 60 seconds
   }
 
   async function loadCourses(){

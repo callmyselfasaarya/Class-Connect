@@ -84,6 +84,122 @@ def debug_attendance_statuses():
 conn = sqlite3.connect('school.db', check_same_thread=False)
 c = conn.cursor()
 # -------------------------------
+# Attendance Helper Functions
+# -------------------------------
+def get_today_absent_students(department=None):
+    """Get list of students absent today"""
+    target_date_variants = _get_target_date_variants_for_attendance()
+    
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    
+    # Get all students from the department
+    # Be robust: use rollno prefix OR current_semester match
+    if department == 'IT':
+        cur.execute("SELECT rollno, name FROM students WHERE rollno LIKE '323UIT%' OR current_semester = 'IT'")
+    elif department == 'AI & ML':
+        cur.execute("SELECT rollno, name FROM students WHERE rollno LIKE '323UAM%' OR current_semester = 'AI & ML'")
+    else:
+        cur.execute("SELECT rollno, name FROM students")
+    
+    students = cur.fetchall()
+    absent_students = []
+    
+    for student in students:
+        rollno = student[0]
+        name = student[1]
+        
+        # Check today's attendance
+        for date_var in target_date_variants:
+            cur.execute("SELECT status FROM attendance WHERE rollno=? AND LOWER(date)=?", (rollno, date_var))
+            record = cur.fetchone()
+            if record and record[0]:
+                status = str(record[0]).strip().upper()
+                if status in ('0', 'NO', 'N', 'ABSENT', 'A'):
+                    absent_students.append({'rollno': rollno, 'name': name})
+                break
+    
+    conn_local.close()
+    return absent_students
+
+def get_low_attendance_students(threshold=75, department=None):
+    """Get list of students with attendance below threshold"""
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    
+    # Get all students from the department
+    if department == 'IT':
+        cur.execute("SELECT rollno, name FROM students WHERE rollno LIKE '323UIT%'")
+    elif department == 'AI & ML':
+        cur.execute("SELECT rollno, name FROM students WHERE rollno LIKE '323UAM%'")
+    else:
+        cur.execute("SELECT rollno, name FROM students")
+    
+    students = cur.fetchall()
+    low_attendance_students = []
+    
+    for student in students:
+        rollno = student[0]
+        name = student[1]
+        
+        # Get attendance records
+        cur.execute("SELECT status FROM attendance WHERE rollno=? AND status IS NOT NULL AND status != ''", (rollno,))
+        records = cur.fetchall()
+        
+        if records:
+            total_days = len(records)
+            present_days = sum(1 for r in records if str(r[0]).strip().upper() in ('1', 'YES', 'Y', 'PRESENT', 'P'))
+            attendance_percentage = (present_days / total_days * 100) if total_days > 0 else 0
+            
+            if attendance_percentage < threshold:
+                low_attendance_students.append({
+                    'rollno': rollno,
+                    'name': name,
+                    'attendance': round(attendance_percentage, 1)
+                })
+    
+    conn_local.close()
+    return sorted(low_attendance_students, key=lambda x: x['attendance'])
+
+def get_department_students(department):
+    """Get students by department (IT or AI & ML)"""
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    
+    if department == 'IT':
+        cur.execute("SELECT * FROM students WHERE rollno LIKE '323UIT%' OR current_semester = 'IT'")
+    elif department == 'AI & ML':
+        cur.execute("SELECT * FROM students WHERE rollno LIKE '323UAM%' OR current_semester = 'AI & ML'")
+    else:
+        cur.execute("SELECT * FROM students")
+    
+    students = cur.fetchall()
+    columns = [desc[0] for desc in cur.description]
+    
+    student_list = []
+    for student in students:
+        student_dict = dict(zip(columns, student))
+        # Parse extra_json if present
+        extra = {}
+        if student_dict.get("extra_json"):
+            try:
+                extra = json.loads(student_dict["extra_json"])
+            except Exception:
+                extra = {}
+        # Merge extra fields
+        for k, v in extra.items():
+            if k not in student_dict or not student_dict[k]:
+                student_dict[k] = v
+        # Remove sensitive fields
+        student_dict.pop("password_hash", None)
+        student_dict.pop("password_plain", None)
+        student_dict.pop("extra_json", None)
+        student_list.append(student_dict)
+    
+    conn_local.close()
+    return student_list
+
+# -------------------------------
 # Attendance date resolution
 # -------------------------------
 def _format_variants(dt: datetime.date) -> list:
@@ -339,33 +455,6 @@ def ensure_default_teacher():
         conn.commit()
 
 ensure_default_teacher()
-
-# Create class-specific admin accounts for AIML and IT (idempotent)
-def ensure_class_admins():
-    # Each will be a row in teachers with role='admin'
-    defaults = [
-        {"teacher_name": "AIML Admin", "department": "AIML", "user_id": "admin_aiml", "pass": "aiml@123"},
-        {"teacher_name": "IT Admin",   "department": "IT",   "user_id": "admin_it",   "pass": "it@123"},
-    ]
-    for d in defaults:
-        try:
-            c.execute("SELECT 1 FROM teachers WHERE user_id=?", (d["user_id"],))
-            if not c.fetchone():
-                c.execute(
-                    """
-                    INSERT INTO teachers (teacher_name, department, user_id, pass_hash, pass_plain, role)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        d["teacher_name"], d["department"], d["user_id"],
-                        generate_password_hash(d["pass"]), d["pass"], 'admin'
-                    )
-                )
-                conn.commit()
-        except Exception as e:
-            print(f"ensure_class_admins: failed for {d['user_id']}: {e}")
-
-ensure_class_admins()
 # --- HELPER FUNCTIONS ---
 def generate_user_id(rollno):
     return f"stu{rollno}"
@@ -393,45 +482,78 @@ def _find_credentials_file():
 
 GOOGLE_CREDENTIALS_FILE = _find_credentials_file()
 # Defaults wired to provided sheet links; override with env vars if needed
-# Backward-compatible single-sheet config
-STUDENTS_SHEET_ID = os.environ.get("STUDENTS_SHEET_ID", "11-fZZNhO7MzKaThXLgyqqV_L5gJcjXC9yc7iWlp3fCo")
-ATTENDANCE_SHEET_ID = os.environ.get("ATTENDANCE_SHEET_ID", "1OgLsxcweN2xBo1okhKaeCN2D1PGwmCd50kxEFXHohnM")
-# Ranges can be either a tab name (entire tab) or A1 range like 'Sheet1!A:F'.
-# Default to your actual tab names from the Google Sheets
-STUDENTS_RANGE = os.environ.get("STUDENTS_RANGE", "Student_Details!A:AZ")
-ATTENDANCE_RANGE = os.environ.get("ATTENDANCE_RANGE", "attendance!A:ZZ")
+# Support multiple spreadsheets by using comma-separated IDs (merged together)
+# Existing AI & ML sheet IDs + IT department sheet IDs provided by user
+_DEFAULT_STUDENTS_IDS = ",".join([
+    "11-fZZNhO7MzKaThXLgyqqV_L5gJcjXC9yc7iWlp3fCo",  # AI & ML students
+    "1p1aog2h0sTvk4wsc4G_Q4Pch4uSIzTF4LOe7qfnUj6k",   # IT students
+])
+_DEFAULT_ATTENDANCE_IDS = ",".join([
+    "1OgLsxcweN2xBo1okhKaeCN2D1PGwmCd50kxEFXHohnM",  # AI & ML attendance
+    "1dklKH7KY3g0Zy92axIrXE1qIdEMSQvFxPnyLL-LqYnY",  # IT attendance
+])
+STUDENTS_SHEET_ID = os.environ.get("STUDENTS_SHEET_ID", _DEFAULT_STUDENTS_IDS)
+ATTENDANCE_SHEET_ID = os.environ.get("ATTENDANCE_SHEET_ID", _DEFAULT_ATTENDANCE_IDS)
+def get_sheet_range(spreadsheet_id, default_range, range_type="data"):
+    """Get the correct sheet range by trying common sheet names and fallbacks"""
+    service = get_sheets_service()
 
-# New multi-sheet JSON configurations (preferred):
-# Example:
-#   STUDENTS_SHEETS_JSON='[{"id":"AIML_ID","range":"Student_Details!A:AZ"},{"id":"IT_ID","range":"STUDENT IT III!A:AZ"}]'
-#   ATTENDANCE_SHEETS_JSON='[{"id":"AIML_ATT_ID","range":"attendance!A:ZZ"},{"id":"IT_ATT_ID","range":"IT ATTENDANCE III!A:ZZ"}]'
-def _parse_sheets_json(env_key, fallback_id, fallback_range):
-    raw = os.environ.get(env_key, "").strip()
-    if not raw:
-        # Provide built-in fallback that also includes user's IT sheets if env not set
-        try:
-            # User-provided IT sheets from request description
-            it_att_id = "1dklKH7KY3g0Zy92axIrXE1qIdEMSQvFxPnyLL-LqYnY"
-            it_stu_id = "1p1aog2h0sTvk4wsc4G_Q4Pch4uSIzTF4LOe7qfnUj6k"
-            return [
-                {"id": fallback_id, "range": fallback_range},
-                {"id": it_stu_id if 'STUDENTS' in env_key else it_att_id,
-                 "range": ("STUDENT IT III!A:AZ" if 'STUDENTS' in env_key else "IT ATTENDANCE III!A:ZZ")}
-            ]
-        except Exception:
-            return [{"id": fallback_id, "range": fallback_range}]
+    # Get actual sheet names
     try:
-        data = json.loads(raw)
-        if isinstance(data, list) and all(isinstance(x, dict) and 'id' in x for x in data):
-            # ensure range fallback
-            for x in data:
-                if 'range' not in x or not str(x['range']).strip():
-                    x['range'] = fallback_range
-            return data
-    except Exception:
-        pass
-    # If JSON invalid, fallback to single-sheet envs
-    return [{"id": fallback_id, "range": fallback_range}]
+        meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields='sheets(properties(title))').execute()
+        sheets = meta.get('sheets', [])
+        sheet_names = [sheet['properties']['title'] for sheet in sheets]
+
+        # Try common sheet names in order of likelihood
+        candidate_names = []
+
+        if range_type == "students":
+            # For students, try these names in order
+            candidate_names = ["Student_Details", "Students", "Student Details", "Sheet1", "Data"]
+        elif range_type == "attendance":
+            # For attendance, try these names in order
+            candidate_names = ["attendance", "Attendance", "Sheet1", "Data"]
+
+        # Add actual sheet names if they're not already in the list
+        for name in sheet_names:
+            if name not in candidate_names:
+                candidate_names.append(name)
+
+        # Try each candidate name
+        for sheet_name in candidate_names:
+            try:
+                # Extract column range from default_range (e.g., "A:AZ" from "Sheet1!A:AZ")
+                column_range = default_range.split('!', 1)[1] if '!' in default_range else default_range
+                test_range = f"{sheet_name}!{column_range}"
+
+                # Test if this range works
+                result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=test_range).execute()
+                if result.get('values'):
+                    print(f"[DEBUG] Successfully found {range_type} data in sheet '{sheet_name}'")
+                    return test_range
+
+            except Exception as e:
+                print(f"[DEBUG] Sheet '{sheet_name}' not accessible or empty: {e}")
+                continue
+
+        # If no sheet works, fall back to the first available sheet
+        if sheet_names:
+            fallback_sheet = sheet_names[0]
+            column_range = default_range.split('!', 1)[1] if '!' in default_range else default_range
+            fallback_range = f"{fallback_sheet}!{column_range}"
+            print(f"[FALLBACK] Using first available sheet '{fallback_sheet}' for {range_type}")
+            return fallback_range
+
+    except Exception as e:
+        print(f"[ERROR] Could not determine sheet structure: {e}")
+
+    # Ultimate fallback - return the original range
+    print(f"[FALLBACK] Using original range: {default_range}")
+    return default_range
+
+# Update the range detection to use the smart function
+STUDENTS_RANGE = os.environ.get("STUDENTS_RANGE", "A:AZ")  # Will be enhanced by get_sheet_range
+ATTENDANCE_RANGE = os.environ.get("ATTENDANCE_RANGE", "A:ZZ")  # Will be enhanced by get_sheet_range
 # Local Excel fallbacks
 STUDENTS_XLSX = os.environ.get("STUDENTS_XLSX", os.path.join(os.getcwd(), "students.xlsx"))
 ATTENDANCE_XLSX = os.environ.get("ATTENDANCE_XLSX", os.path.join(os.getcwd(), "attendance.xlsx"))
@@ -472,7 +594,7 @@ def get_sheets_service():
     return _sheets_service
 
 def _split_ids(ids: str):
-    # Allow comma-separated multiple spreadsheet IDs (legacy)
+    # Allow comma-separated multiple spreadsheet IDs
     return [s.strip() for s in str(ids or "").split(',') if s.strip()]
 
 def read_sheet_values(spreadsheet_id, a1_range):
@@ -512,43 +634,39 @@ def read_excel_values(xlsx_path):
 
 def load_students_from_gsheets():
     global _last_students_sync_ts
-    # Prefer JSON multi-sheet config
-    sheets_cfg = _parse_sheets_json(
-        'STUDENTS_SHEETS_JSON', STUDENTS_SHEET_ID, STUDENTS_RANGE
-    ) if (os.environ.get('STUDENTS_SHEETS_JSON') or '').strip() or True else None
+    if not STUDENTS_SHEET_ID:
+        return
 
+    # Get the correct sheet range for students
+    students_range = get_sheet_range(STUDENTS_SHEET_ID, "A:AZ", "students")
+    print(f"[DEBUG] Using students range: {students_range}")
+
+    # Merge rows from all provided sheet IDs (first row of the first sheet is treated as headers)
     merged = []
     headers = None
-    if sheets_cfg:
-        for entry in sheets_cfg:
-            sid = entry.get('id')
-            rng = entry.get('range') or STUDENTS_RANGE
+    for sid in _split_ids(STUDENTS_SHEET_ID):
+        try:
+            vals = read_sheet_values(sid, students_range)
+        except Exception as e:
+            # Fallback: if a tab name was specified but doesn't exist in this spreadsheet,
+            # retry using only the column range (first sheet).
             try:
-                vals = read_sheet_values(sid, rng)
-            except Exception as e:
-                print(f"Error reading student sheet values for sheet ID {sid}: {e}")
+                if '!' in students_range:
+                    col_only = students_range.split('!', 1)[1]
+                else:
+                    col_only = students_range
+                print(f"[FALLBACK] Retrying students read for {sid} with range '{col_only}' due to: {e}")
+                vals = read_sheet_values(sid, col_only)
+            except Exception as e2:
+                print(f"Error reading student sheet values for sheet ID {sid} (fallback failed): {e2}")
                 continue
-            if not vals:
-                print(f"No values returned for student sheet ID {sid}")
-                continue
-            if headers is None:
-                headers = vals[0]
-            merged.extend(vals[1:])
-    else:
-        if not STUDENTS_SHEET_ID:
-            return
-        for sid in _split_ids(STUDENTS_SHEET_ID):
-            try:
-                vals = read_sheet_values(sid, STUDENTS_RANGE)
-            except Exception as e:
-                print(f"Error reading student sheet values for sheet ID {sid}: {e}")
-                continue
-            if not vals:
-                print(f"No values returned for student sheet ID {sid}")
-                continue
-            if headers is None:
-                headers = vals[0]
-            merged.extend(vals[1:])
+        if not vals:
+            print(f"No values returned for student sheet ID {sid}")
+            continue
+        if headers is None:
+            headers = vals[0]
+        # append data rows
+        merged.extend(vals[1:])
     if not headers:
         print("No student data found in Google Sheet.")
         return
@@ -757,7 +875,9 @@ def load_courses_from_gsheets():
     merged = []
     headers = None
     for sid in _split_ids(COURSES_SHEET_ID):
-        vals = read_sheet_values(sid, COURSES_RANGE)
+        # Get the correct sheet range for courses
+        courses_range = get_sheet_range(sid, "A:C", "courses")
+        vals = read_sheet_values(sid, courses_range)
         if not vals:
             continue
         if headers is None and vals:
@@ -941,89 +1061,150 @@ def load_attendance_from_gsheets():
     print(f"[DEBUG] Starting attendance sync from Google Sheets...")
     print(f"[DEBUG] ATTENDANCE_SHEET_ID: {ATTENDANCE_SHEET_ID}")
     print(f"[DEBUG] ATTENDANCE_RANGE: {ATTENDANCE_RANGE}")
-    
+
     if not ATTENDANCE_SHEET_ID:
         print("[ERROR] No attendance sheet ID configured!")
         return
-    
+
+    # Get the correct sheet range for attendance
+    attendance_range = get_sheet_range(ATTENDANCE_SHEET_ID, "A:ZZ", "attendance")
+    print(f"[DEBUG] Using attendance range: {attendance_range}")
+
     # NOTE: Do NOT clear the table up-front. Only clear after we have validated
     # that we actually fetched usable data, to avoid wiping existing data on failures.
 
     merged = []
     headers = None
-    att_cfg = _parse_sheets_json(
-        'ATTENDANCE_SHEETS_JSON', ATTENDANCE_SHEET_ID, ATTENDANCE_RANGE
-    ) if (os.environ.get('ATTENDANCE_SHEETS_JSON') or '').strip() or True else None
+    sheet_ids = _split_ids(ATTENDANCE_SHEET_ID)
+    print(f"[DEBUG] Processing {len(sheet_ids)} sheet IDs: {sheet_ids}")
 
-    if att_cfg:
-        for entry in att_cfg:
-            sid = entry.get('id')
-            rng = entry.get('range') or ATTENDANCE_RANGE
-            print(f"[DEBUG] Processing sheet ID: {sid} range: {rng}")
+    for sid in sheet_ids:
+        print(f"[DEBUG] Processing sheet ID: {sid}")
+        try:
+            vals = read_sheet_values(sid, attendance_range)
+            print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet {sid}")
+            if not vals:
+                print(f"[WARNING] No values returned for sheet ID: {sid}")
+                continue
+            if headers is None and vals:
+                headers = [str(h).strip() for h in vals[0]]
+                print(f"[DEBUG] Headers found for {sid}: {headers[:10]}...")  # Show first 10 headers
+            merged.extend(vals[1:])
+            print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
+        except Exception as e:
+            print(f"[ERROR] Failed to read sheet {sid}: {e}")
+            # Fallback: if a tab name was specified but doesn't exist in this spreadsheet,
+            # retry using only the column range (first sheet)
             try:
-                vals = read_sheet_values(sid, rng)
-                print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet")
+                if '!' in attendance_range:
+                    col_only = attendance_range.split('!', 1)[1]
+                else:
+                    col_only = attendance_range
+                print(f"[FALLBACK] Retrying attendance read for {sid} with range '{col_only}'")
+                vals = read_sheet_values(sid, col_only)
+                print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet {sid} (fallback)")
                 if not vals:
-                    print(f"[WARNING] No values returned for sheet ID: {sid}")
+                    print(f"[WARNING] No values returned for sheet ID (fallback): {sid}")
                     continue
                 if headers is None and vals:
                     headers = [str(h).strip() for h in vals[0]]
-                    print(f"[DEBUG] Headers found: {headers[:10]}...")
+                    print(f"[DEBUG] Headers found (fallback) for {sid}: {headers[:10]}...")
                 merged.extend(vals[1:])
-                print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
-            except Exception as e:
-                print(f"[ERROR] Failed to read sheet {sid}: {e}")
+                print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid} (fallback)")
+            except Exception as e2:
+                print(f"[ERROR] Failed to read sheet {sid} (fallback failed): {e2}")
                 continue
-    else:
-        for sid in _split_ids(ATTENDANCE_SHEET_ID):
-            print(f"[DEBUG] Processing sheet ID: {sid}")
-            try:
-                vals = read_sheet_values(sid, ATTENDANCE_RANGE)
-                print(f"[DEBUG] Retrieved {len(vals) if vals else 0} rows from sheet")
-                if not vals:
-                    print(f"[WARNING] No values returned for sheet ID: {sid}")
-                    continue
-                if headers is None and vals:
-                    headers = [str(h).strip() for h in vals[0]]
-                    print(f"[DEBUG] Headers found: {headers[:10]}...")  # Show first 10 headers
-                merged.extend(vals[1:])
-                print(f"[DEBUG] Added {len(vals[1:])} data rows from sheet {sid}")
-            except Exception as e:
-                print(f"[ERROR] Failed to read sheet {sid}: {e}")
-                continue
-    
+
     if not headers or not merged:
         print("[ERROR] No attendance data found in Google Sheet.")
         print(f"[DEBUG] Headers: {headers}")
         print(f"[DEBUG] Merged data rows: {len(merged)}")
         return
     values = [headers] + merged
-    # Expect first columns to include ROLL NO; remaining date columns are those that parse as dates
+
+    # Enhanced roll number column detection - try multiple patterns
     rollno_idx = None
-    try:
-        rollno_idx = next(i for i, h in enumerate(headers) if str(h).strip().lower() in ['roll no', 'rollno', 'roll_no'])
-    except StopIteration:
-        print("ROLL NO column not found in attendance sheet; trying REG NO fallback")
-        try:
-            rollno_idx = next(i for i, h in enumerate(headers) if str(h).strip().lower() in ['reg no', 'regno', 'registration no'])
-        except StopIteration:
-            print("Neither ROLL NO nor REG NO found in attendance sheet")
-            return
+    rollno_patterns = [
+        'roll no', 'rollno', 'roll_no', 'roll number', 'rollnumber',
+        'reg no', 'regno', 'registration no', 'registration number',
+        'student id', 'student_id', 'student roll', 'student_roll',
+        'enrollment no', 'enrollment_no', 'enroll no', 'enroll_no'
+    ]
+
+    print(f"[DEBUG] Looking for roll number column in headers: {headers}")
+    for i, header in enumerate(headers):
+        header_lower = str(header).strip().lower()
+        for pattern in rollno_patterns:
+            if pattern in header_lower or header_lower in pattern:
+                rollno_idx = i
+                print(f"[DEBUG] Found roll number column at index {i}: '{header}' (matched pattern: '{pattern}')")
+                break
+        if rollno_idx is not None:
+            break
+
+    if rollno_idx is None:
+        print("[ERROR] No roll number column found in attendance sheet")
+        print("[DEBUG] Available headers:")
+        for i, h in enumerate(headers):
+            print(f"  {i}: '{h}'")
         return
-    date_columns = [i for i, h in enumerate(headers) if i != rollno_idx and _is_date_header(h)]
-    print(f"[DEBUG] Attendance import: headers={headers}")
-    print(f"[DEBUG] Attendance import: first 3 data rows={merged[:3]}")
-    print(f"[DEBUG] Attendance import: rollno_idx={rollno_idx}, date_columns={date_columns}")
-    
+
+    # Check for date columns - enhanced detection
+    date_columns = []
+    date_patterns = ['date', 'day', 'time', '/', '-', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+    for i, h in enumerate(headers):
+        if i != rollno_idx:
+            header_str = str(h).strip().lower()
+            # Check if header looks like a date (contains date patterns or is parseable as date)
+            is_date = False
+            if any(pattern in header_str for pattern in date_patterns):
+                is_date = True
+            else:
+                # Try to parse as date
+                try:
+                    from datetime import datetime
+                    datetime.strptime(header_str, '%Y-%m-%d')
+                    is_date = True
+                except:
+                    try:
+                        datetime.strptime(header_str, '%d-%m-%Y')
+                        is_date = True
+                    except:
+                        try:
+                            datetime.strptime(header_str, '%d-%b-%Y')
+                            is_date = True
+                        except:
+                            pass
+
+            if is_date:
+                date_columns.append(i)
+
+    print(f"[DEBUG] Found {len(date_columns)} date columns: {[headers[i] for i in date_columns[:10]]}...")
+
+    if not date_columns:
+        print("[ERROR] No date columns found in attendance sheet")
+        return
+
     # Debug: Show unique status values found in the data
     unique_statuses = set()
-    for row in merged[:10]:  # Check first 10 rows for status variety
+    for row in merged[:20]:  # Check first 20 rows for status variety
         for idx in date_columns:
             if idx < len(row) and row[idx] is not None:
                 status = str(row[idx]).strip()
                 if status:
                     unique_statuses.add(status)
     print(f"[DEBUG] Unique status values found: {sorted(unique_statuses)}")
+
+    # Check for IT-specific roll numbers in the data
+    it_rollnos_in_sheet = set()
+    for row in merged:
+        if rollno_idx < len(row) and row[rollno_idx]:
+            rollno = str(row[rollno_idx]).strip()
+            if rollno and ('IT' in rollno.upper() or rollno.startswith('3') or rollno.startswith('4')):
+                it_rollnos_in_sheet.add(rollno)
+    print(f"[DEBUG] Found {len(it_rollnos_in_sheet)} potential IT roll numbers in attendance sheet: {sorted(list(it_rollnos_in_sheet))[:10]}...")
+
     # Clear existing attendance data now that we have valid headers and rows
     try:
         c.execute("DELETE FROM attendance")
@@ -1035,6 +1216,7 @@ def load_attendance_from_gsheets():
         return
 
     inserted_count = 0
+    it_attendance_count = 0
     for row in values[1:]:
         if rollno_idx >= len(row):
             print(f"[DEBUG] Skipping row (rollno_idx out of range): {row}")
@@ -1043,6 +1225,9 @@ def load_attendance_from_gsheets():
         if not rollno:
             print(f"[DEBUG] Skipping row (no rollno): {row}")
             continue
+
+        is_it_student = 'IT' in rollno.upper() or rollno.startswith('3') or rollno.startswith('4')
+
         for idx in date_columns:
             date_label = str(headers[idx]).strip()
             if not date_label:
@@ -1055,28 +1240,32 @@ def load_attendance_from_gsheets():
                 status = 'P'
             elif s_up in ('ABSENT','A','0','NO','N'):
                 status = 'A'
+
             c.execute("INSERT INTO attendance (rollno, date, status) VALUES (?, ?, ?)", (rollno, date_label, status))
             inserted_count += 1
-    print(f"[DEBUG] Attendance import: total rows inserted={inserted_count}")
+            if is_it_student:
+                it_attendance_count += 1
+
+    print(f"[DEBUG] Attendance import: total rows inserted={inserted_count}, IT student rows={it_attendance_count}")
     conn.commit()
     _last_attendance_sync_ts = int(time.time())
-    
+
     # Verify the data was actually inserted
     try:
         c.execute("SELECT COUNT(*) FROM attendance")
         total = c.fetchone()[0]
         print(f"Attendance import from Google Sheets completed successfully. Total attendance rows in DB: {total}")
-        
+
         # Show sample of inserted data
         c.execute("SELECT rollno, date, status FROM attendance LIMIT 5")
         sample_records = c.fetchall()
         print(f"[DEBUG] Sample attendance records: {sample_records}")
-        
-        # Check for any students with attendance data
-        c.execute("SELECT DISTINCT rollno FROM attendance LIMIT 10")
-        students_with_attendance = c.fetchall()
-        print(f"[DEBUG] Students with attendance data: {[s[0] for s in students_with_attendance]}")
-        
+
+        # Check for IT students with attendance data
+        c.execute("SELECT DISTINCT rollno FROM attendance WHERE rollno LIKE '%IT%' OR rollno LIKE '3%' OR rollno LIKE '4%' LIMIT 10")
+        it_students_with_attendance = c.fetchall()
+        print(f"[DEBUG] IT students with attendance data: {[s[0] for s in it_students_with_attendance]}")
+
     except Exception as e:
         print(f"[ERROR] Failed to verify attendance data: {e}")
         print("Attendance import from Google Sheets completed with errors.")
@@ -1133,7 +1322,7 @@ def load_attendance_from_excel():
 # Initial data load: Google Sheets only
 # Note: Passwords are only generated for NEW students, existing students keep their current passwords
 try:
-    if not USE_EXCEL_ONLY and (STUDENTS_SHEET_ID or os.environ.get('STUDENTS_SHEETS_JSON')):
+    if not USE_EXCEL_ONLY and STUDENTS_SHEET_ID:
         load_students_from_gsheets()
 except Exception as e:
     print("Error loading students:", e)
@@ -1144,7 +1333,7 @@ except Exception as e:
         print("Excel load students failed:", e2)
 
 try:
-    if not USE_EXCEL_ONLY and (ATTENDANCE_SHEET_ID or os.environ.get('ATTENDANCE_SHEETS_JSON')):
+    if not USE_EXCEL_ONLY and ATTENDANCE_SHEET_ID:
         load_attendance_from_gsheets()
 except Exception as e:
     print("Error loading attendance:", e)
@@ -1224,7 +1413,171 @@ def manual_sync_attendance():
             "message": f"Attendance sync failed: {str(e)}"
         }), 500
 
-# === COMPREHENSIVE ATTENDANCE TEST ENDPOINT ===
+# === MANUAL STUDENTS SYNC ENDPOINT ===
+@app.route('/sync_students', methods=['POST'])
+@login_required('admin')
+def manual_sync_students():
+    """Manually trigger students sync from Google Sheets"""
+    try:
+        # Run sync
+        if USE_EXCEL_ONLY:
+            load_students_from_excel()
+        else:
+            load_students_from_gsheets()
+
+        # Count students
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+        cur.execute("SELECT COUNT(*) FROM students")
+        total = cur.fetchone()[0]
+        conn_local.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"Students sync completed. Total students in database: {total}",
+            "total_students": total
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Students sync failed: {str(e)}"
+        }), 500
+
+# === TEST IT ATTENDANCE SHEET CONNECTION ===
+@app.route('/test_it_attendance_sheet', methods=['GET'])
+@login_required('admin')
+def test_it_attendance_sheet():
+    """Test connection specifically to IT attendance sheet"""
+    results = {
+        "success": False,
+        "steps": [],
+        "errors": [],
+        "data_preview": None,
+        "sheet_analysis": {}
+    }
+
+    # IT attendance sheet ID from user's link
+    IT_ATTENDANCE_SHEET_ID = "1dklKH7KY3g0Zy92axIrXE1qIdEMSQvFxPnyLL-LqYnY"
+    IT_ATTENDANCE_RANGE = "attendance!A:ZZ"  # Try different ranges
+
+    try:
+        # Step 1: Check credentials
+        if not os.path.exists(GOOGLE_CREDENTIALS_FILE):
+            results["errors"].append(f"Credentials file not found: {GOOGLE_CREDENTIALS_FILE}")
+            return jsonify(results)
+
+        with open(GOOGLE_CREDENTIALS_FILE, 'r') as f:
+            cred_data = json.load(f)
+
+        if cred_data.get('type') != 'service_account':
+            results["errors"].append("Credentials file is not a service account")
+            return jsonify(results)
+
+        results["steps"].append("✓ Credentials file found and valid")
+        results["service_account_email"] = cred_data.get('client_email')
+
+    except Exception as e:
+        results["errors"].append(f"Error reading credentials: {e}")
+        return jsonify(results)
+
+    # Step 2: Test Google Sheets service
+    try:
+        service = get_sheets_service()
+        results["steps"].append("✓ Google Sheets service initialized")
+    except Exception as e:
+        results["errors"].append(f"Error initializing Google Sheets service: {e}")
+        return jsonify(results)
+
+    # Step 3: Test reading the IT attendance sheet with different ranges
+    ranges_to_try = [
+        "attendance!A:ZZ",  # Main tab
+        "Sheet1!A:ZZ",      # First sheet
+        "A:ZZ",             # Default to first sheet
+    ]
+
+    for test_range in ranges_to_try:
+        try:
+            print(f"[TEST] Attempting to read IT sheet {IT_ATTENDANCE_SHEET_ID} with range {test_range}")
+            values = read_sheet_values(IT_ATTENDANCE_SHEET_ID, test_range)
+
+            if not values:
+                print(f"[WARNING] No data returned for range: {test_range}")
+                continue
+
+            results["steps"].append(f"✓ Successfully read {len(values)} rows from IT sheet with range '{test_range}'")
+            results["data_preview"] = {
+                "total_rows": len(values),
+                "headers": values[0] if values else [],
+                "sample_data": values[1:6] if len(values) > 1 else [],  # First 5 data rows
+                "range_used": test_range
+            }
+
+            # Step 4: Analyze the IT sheet structure
+            headers = values[0] if values else []
+            results["sheet_analysis"]["headers"] = headers
+            results["sheet_analysis"]["range"] = test_range
+
+            # Find roll number column
+            rollno_idx = None
+            for i, h in enumerate(headers):
+                header_lower = str(h).strip().lower()
+                if header_lower in ['roll no', 'rollno', 'roll_no', 'reg no', 'regno']:
+                    rollno_idx = i
+                    results["sheet_analysis"]["rollno_column"] = {
+                        "index": i,
+                        "header": h,
+                        "sample_values": [str(row[i]).strip() if i < len(row) else "" for row in values[1:6] if len(values) > 1]
+                    }
+                    break
+
+            if rollno_idx is None:
+                results["errors"].append("ROLL NO column not found in IT sheet headers")
+                continue
+
+            # Check for date columns
+            date_columns = []
+            for i, h in enumerate(headers):
+                if i != rollno_idx and _is_date_header(h):
+                    date_columns.append({"index": i, "header": h})
+
+            results["sheet_analysis"]["date_columns"] = date_columns
+            results["sheet_analysis"]["total_date_columns"] = len(date_columns)
+
+            # Check for IT roll numbers in the data
+            it_rollnos = set()
+            for row in values[1:]:
+                if rollno_idx < len(row) and row[rollno_idx]:
+                    rollno = str(row[rollno_idx]).strip()
+                    # Check if this looks like an IT roll number
+                    if rollno and ('IT' in rollno.upper() or rollno.startswith('3') or rollno.startswith('4')):
+                        it_rollnos.add(rollno)
+
+            results["sheet_analysis"]["potential_it_rollnos"] = sorted(list(it_rollnos))[:20]  # Show first 20
+            results["sheet_analysis"]["total_it_rollnos_found"] = len(it_rollnos)
+
+            # Check unique status values
+            unique_statuses = set()
+            for row in values[1:]:
+                for i in range(len(headers)):
+                    if i < len(row) and row[i] is not None:
+                        status = str(row[i]).strip()
+                        if status and i != rollno_idx:
+                            unique_statuses.add(status)
+
+            results["sheet_analysis"]["unique_statuses"] = sorted(list(unique_statuses))
+
+            results["success"] = True
+            break  # Success with this range
+
+        except Exception as e:
+            print(f"[ERROR] Failed to read IT sheet with range '{test_range}': {e}")
+            results["errors"].append(f"Error reading IT sheet with range '{test_range}': {e}")
+            continue
+
+    if not results.get("data_preview"):
+        results["errors"].append("Could not read IT attendance sheet with any of the tested ranges")
+
+    return jsonify(results)
 @app.route('/test_attendance_connection', methods=['GET'])
 @login_required('admin')
 def test_attendance_connection():
@@ -1314,7 +1667,39 @@ def test_attendance_connection():
     
     return jsonify(results)
 
-# === ADMIN DEBUG DASHBOARD ===
+# === MANUAL ATTENDANCE SYNC ENDPOINT ===
+@app.route('/manual_attendance_sync', methods=['POST'])
+@login_required('admin')
+def manual_attendance_sync():
+    """Manually sync attendance data from Excel file"""
+    try:
+        # Import the attendance generator
+        import subprocess
+        import sys
+
+        # Run the attendance generator script
+        result = subprocess.run([
+            sys.executable, 'generate_attendance.py'
+        ], capture_output=True, text=True, cwd=os.getcwd())
+
+        if result.returncode == 0:
+            return jsonify({
+                "success": True,
+                "message": "Attendance sync completed successfully!",
+                "output": result.stdout
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Attendance sync failed",
+                "error": result.stderr
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Error during attendance sync: {str(e)}"
+        }), 500
 @app.route('/admin_debug')
 @login_required('admin')
 def admin_debug():
@@ -1357,9 +1742,15 @@ def admin_debug():
         </div>
         
         <div class="section">
-            <h3>Database Status</h3>
-            <button onclick="checkDatabase()">Check Database Status</button>
-            <div id="database-result" class="result"></div>
+            <h3>Manual Attendance Sync</h3>
+            <button onclick="manualAttendanceSync()">Sync Attendance from Excel</button>
+            <div id="manual-sync-result" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>IT Student Attendance Analysis</h3>
+            <button onclick="analyzeITAttendance()">Analyze IT Student Attendance</button>
+            <div id="it-analysis-result" class="result"></div>
         </div>
         
         <script>
@@ -1411,14 +1802,56 @@ def admin_debug():
                 }
             }
             
-            async function checkDatabase() {
+            async function manualAttendanceSync() {
                 try {
-                    const response = await fetch('/debug/attendance_statuses');
+                    const response = await fetch('/manual_attendance_sync', { method: 'POST' });
                     const data = await response.json();
-                    document.getElementById('database-result').innerHTML = 
-                        '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    const resultDiv = document.getElementById('manual-sync-result');
+                    if (data.success) {
+                        resultDiv.innerHTML = '<div class="success">Manual sync successful!</div><pre>' + 
+                            data.message + '</pre>';
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">Manual sync failed!</div><pre>' + 
+                            (data.error || data.message) + '</pre>';
+                    }
                 } catch (error) {
-                    document.getElementById('database-result').innerHTML = 
+                    document.getElementById('manual-sync-result').innerHTML = 
+                        '<div class="error">Error: ' + error.message + '</div>';
+                }
+            }
+            
+            async function analyzeITAttendance() {
+                try {
+                    const response = await fetch('/debug/it_attendance_analysis');
+                    const data = await response.json();
+                    const resultDiv = document.getElementById('it-analysis-result');
+                    if (data.success) {
+                        resultDiv.innerHTML = '<div class="success">Analysis completed!</div><pre>' + 
+                            JSON.stringify(data, null, 2) + '</pre>';
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">Analysis failed!</div><pre>' + 
+                            JSON.stringify(data, null, 2) + '</pre>';
+                    }
+                } catch (error) {
+                    document.getElementById('it-analysis-result').innerHTML = 
+                        '<div class="error">Error: ' + error.message + '</div>';
+                }
+            }
+            
+            async function testITAttendanceSheet() {
+                try {
+                    const response = await fetch('/test_it_attendance_sheet');
+                    const data = await response.json();
+                    const resultDiv = document.getElementById('it-sheet-result');
+                    if (data.success) {
+                        resultDiv.innerHTML = '<div class="success">IT Sheet test completed!</div><pre>' + 
+                            JSON.stringify(data, null, 2) + '</pre>';
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">IT Sheet test failed!</div><pre>' + 
+                            JSON.stringify(data, null, 2) + '</pre>';
+                    }
+                } catch (error) {
+                    document.getElementById('it-sheet-result').innerHTML = 
                         '<div class="error">Error: ' + error.message + '</div>';
                 }
             }
@@ -1512,8 +1945,6 @@ def staff_login():
             return redirect(url_for('hod_dashboard'))
         if role == 'principal':
             return redirect(url_for('principal_dashboard'))
-        if role == 'admin':
-            return redirect(url_for('admin_dashboard'))
         return redirect(url_for('teacher_dashboard'))
 
     return render_template('index.html', error="Invalid staff credentials")
@@ -1528,7 +1959,59 @@ def admin_dashboard():
 @app.route('/teacher_dashboard')
 @login_required('teacher')
 def teacher_dashboard():
-    return render_template('teacher_dashboard.html')
+    # Fetch teacher's department
+    try:
+        c.execute("SELECT department FROM teachers WHERE user_id=?", (session.get('user'),))
+        row = c.fetchone()
+        department = (row[0] or '').strip() if row and row[0] else None
+    except Exception:
+        department = None
+    
+    # Determine department from teacher name/ID pattern (fallback)
+    if not department:
+        user_id = session.get('user', '')
+        if 'IT' in user_id.upper():
+            department = 'IT'
+        elif 'AM' in user_id.upper() or 'AI' in user_id.upper():
+            department = 'AI & ML'
+    
+    # Get department-specific students
+    department_students = get_department_students(department) if department else []
+    
+    # Categorize students
+    hostellers = [s for s in department_students if (s.get('day_scholar_or_hosteller', '').lower() == 'hosteller')]
+    day_scholars = [s for s in department_students if (s.get('day_scholar_or_hosteller', '').lower() == 'day scholar')]
+    outstaying_students = [s for s in department_students if s.get('outside_staying_address')]
+    
+    # Get attendance lists
+    today_absent = get_today_absent_students(department)
+    low_attendance = get_low_attendance_students(75, department)
+    
+    # Compute overall department counts for IT and AI & ML
+    it_count = 0
+    aiml_count = 0
+    try:
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+        cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UIT%' OR current_semester = 'IT'")
+        it_count = int(cur.fetchone()[0] or 0)
+        cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UAM%' OR current_semester = 'AI & ML'")
+        aiml_count = int(cur.fetchone()[0] or 0)
+        conn_local.close()
+    except Exception:
+        it_count = it_count or 0
+        aiml_count = aiml_count or 0
+    
+    return render_template(
+        'teacher_dashboard.html',
+        department=department,
+        department_students=department_students,
+        hostellers=hostellers,
+        day_scholars=day_scholars,
+        outstaying_students=outstaying_students,
+        today_absent=today_absent,
+        low_attendance=low_attendance
+    )
 
 @app.route('/hod_dashboard')
 @login_required('hod')
@@ -1540,68 +2023,68 @@ def hod_dashboard():
         department = (row[0] or '').strip() if row and row[0] else None
     except Exception:
         department = None
-
-    # Fetch department students
-    if department:
-        c.execute("SELECT * FROM students WHERE current_semester=?", (department,))
-    else:
-        c.execute("SELECT * FROM students")
-    students = c.fetchall()
-    columns = [desc[0] for desc in c.description]
-
-    # Process student data
-    department_students = []
-    hostellers = []
-    day_scholars = []
-    outstaying_students = []
-
-    for student in students:
-        student_dict = dict(zip(columns, student))
-        # Parse extra_json if present
-        extra = {}
-        if student_dict.get("extra_json"):
-            try:
-                extra = json.loads(student_dict["extra_json"])
-            except Exception:
-                extra = {}
-        # Merge extra fields, but don't overwrite main columns
-        for k, v in extra.items():
-            if k not in student_dict or not student_dict[k]:
-                student_dict[k] = v
-        # Remove sensitive fields
-        student_dict.pop("password_hash", None)
-        student_dict.pop("password_plain", None)
-        student_dict.pop("extra_json", None)
-
-        # Categorize students
-        department_students.append(student_dict)
-        if student_dict.get("day_scholar_or_hosteller", "").lower() == "hosteller":
-            hostellers.append(student_dict)
-        elif student_dict.get("day_scholar_or_hosteller", "").lower() == "day scholar":
-            day_scholars.append(student_dict)
-        if student_dict.get("outside_staying_address"):
-            outstaying_students.append(student_dict)
-
+    
+    # Determine department from HOD name/ID pattern (fallback)
+    if not department:
+        user_id = session.get('user', '')
+        if 'IT' in user_id.upper():
+            department = 'IT'
+        elif 'AI' in user_id.upper() or 'ML' in user_id.upper():
+            department = 'AI & ML'
+    
+    # Get department-specific students
+    department_students = get_department_students(department) if department else []
+    
+    # Categorize students
+    hostellers = [s for s in department_students if (s.get('day_scholar_or_hosteller', '').lower() == 'hosteller')]
+    day_scholars = [s for s in department_students if (s.get('day_scholar_or_hosteller', '').lower() == 'day scholar')]
+    outstaying_students = [s for s in department_students if s.get('outside_staying_address')]
+    
+    # Get attendance lists
+    today_absent = get_today_absent_students(department)
+    low_attendance = get_low_attendance_students(75, department)
+    
     # Fetch courses
     c.execute("SELECT * FROM courses")
     courses = c.fetchall()
-
-    # Fetch attendance data
-    c.execute("SELECT * FROM attendance")
+    
+    # Fetch attendance data for the department
+    if department == 'IT':
+        c.execute("SELECT * FROM attendance WHERE rollno LIKE '323UIT%'")
+    elif department == 'AI & ML':
+        c.execute("SELECT * FROM attendance WHERE rollno LIKE '323UAM%'")
+    else:
+        c.execute("SELECT * FROM attendance")
     attendance = c.fetchall()
-
+    # Compute overall department counts for IT and AI & ML
+    it_count = 0
+    aiml_count = 0
+    try:
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+        cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UIT%' OR current_semester = 'IT'")
+        it_count = int(cur.fetchone()[0] or 0)
+        cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UAM%' OR current_semester = 'AI & ML'")
+        aiml_count = int(cur.fetchone()[0] or 0)
+        conn_local.close()
+    except Exception:
+        it_count = it_count or 0
+        aiml_count = aiml_count or 0
+    
     return render_template(
         'hod_dashboard.html',
+        department=department,
         department_students=department_students,
         hostellers=hostellers,
         day_scholars=day_scholars,
         outstaying_students=outstaying_students,
+        today_absent=today_absent,
+        low_attendance=low_attendance,
         courses=courses,
-        attendance=attendance
+        attendance=attendance,
+        it_count=it_count,
+        aiml_count=aiml_count
     )
-
-@app.route('/principal_dashboard')
-@login_required('principal')
 def principal_dashboard():
     return render_template('principal_dashboard.html')
 
@@ -1651,13 +2134,23 @@ def get_students():
         if q_dept:
             cur.execute("SELECT * FROM students WHERE current_semester = ?", (q_dept,))
         elif dept:
-            cur.execute("SELECT * FROM students WHERE current_semester = ?", (dept,))
+            if dept == 'IT':
+                cur.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UIT%'", (dept,))
+            elif dept == 'AI & ML':
+                cur.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UAM%'", (dept,))
+            else:
+                cur.execute("SELECT * FROM students WHERE current_semester = ?", (dept,))
         else:
             cur.execute("SELECT * FROM students")
     else:
         # Teacher remains restricted to their department
         if dept:
-            cur.execute("SELECT * FROM students WHERE current_semester = ?", (dept,))
+            if dept == 'IT':
+                cur.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UIT%'", (dept,))
+            elif dept == 'AI & ML':
+                cur.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UAM%'", (dept,))
+            else:
+                cur.execute("SELECT * FROM students WHERE current_semester = ?", (dept,))
         else:
             cur.execute("SELECT * FROM students")
     rows = cur.fetchall()
@@ -1917,6 +2410,78 @@ def list_my_out_passes():
     rows = cur.fetchall()
     conn_local.close()
     return jsonify({'success': True, 'passes': [dict(r) for r in rows]})
+
+@app.route('/out_pass/teacher_create', methods=['POST'])
+@login_required_any(('teacher','hod','admin'))
+def teacher_create_out_pass():
+    """Teachers/HOD/Admin can directly create an approved out pass for a student.
+    This is useful for time-bound permissions that should trigger expiry alerts on the student dashboard.
+    """
+    data = request.get_json() or {}
+    rollno = (data.get('rollno') or '').strip()
+    pass_type = (data.get('pass_type') or '').strip().lower()
+    reason = (data.get('reason') or '').strip()
+    from_datetime = (data.get('from_datetime') or '').strip()
+    to_datetime = (data.get('to_datetime') or '').strip()
+    od_duration = (data.get('od_duration') or '').strip()
+    od_days = int(data.get('od_days') or 0)
+    other_hours = (data.get('other_hours') or '').strip()
+
+    if pass_type not in PASS_TYPES:
+        return jsonify({'success': False, 'message': 'Invalid pass type'}), 400
+
+    # For expiry alerts to work, to_datetime should be set
+    if not to_datetime:
+        return jsonify({'success': False, 'message': 'Please provide To datetime for the out pass'}), 400
+
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    cur.execute("SELECT user_id, name, current_semester FROM students WHERE rollno=?", (rollno,))
+    srow = cur.fetchone()
+    if not srow:
+        conn_local.close()
+        return jsonify({'success': False, 'message': 'Student not found'}), 404
+
+    student_user_id = srow[0] or ''
+    student_name = srow[1] or ''
+    department = srow[2] or ''
+
+    # Insert as approved so it appears for the student and expiry alerts can trigger
+    cur.execute(
+        """
+        INSERT INTO out_passes (
+            user_role, requester_user_id, requester_name, rollno, department,
+            pass_type, reason, from_datetime, to_datetime,
+            od_duration, od_days, other_hours,
+            status, advisor_status, hod_status,
+            advisor_user_id, approver_user_id, remarks,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'approved', 'approved', ?, ?, ?, ?, ?)
+        """,
+        (
+            'student',  # requester role is student (created on behalf of)
+            student_user_id,
+            student_name,
+            rollno,
+            department,
+            pass_type,
+            reason,
+            from_datetime,
+            to_datetime,
+            od_duration,
+            od_days,
+            other_hours,
+            session.get('user'),  # advisor_user_id = teacher/hod who created
+            session.get('user'),  # approver_user_id
+            'Created by teacher',
+            _now_epoch(),
+            _now_epoch(),
+        )
+    )
+    conn_local.commit()
+    new_id = cur.lastrowid
+    conn_local.close()
+    return jsonify({'success': True, 'id': new_id})
 
 def _role_for_approvals() -> str:
     role = (session.get('role') or '').lower()
@@ -2772,9 +3337,123 @@ def principal_all_students_attendance_averages():
     conn_local.close()
     return jsonify({"success": True, "students": attendance_data})
  
-# === DEBUG: Show all attendance status for a given roll number ===
+# === DEBUG: Analyze IT Student Attendance ===
+@app.route('/debug/it_attendance_analysis', methods=['GET'])
+@login_required('admin')
+def debug_it_attendance_analysis():
+    """Debug endpoint to analyze IT student attendance data"""
+    results = {
+        "success": False,
+        "steps": [],
+        "errors": [],
+        "data_analysis": {}
+    }
 
-# --- RUN SERVER ---
+    try:
+        # Step 1: Check if IT students exist in database
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM students WHERE current_semester LIKE '%IT%'")
+        it_students_count = cur.fetchone()[0]
+        results["steps"].append(f"✓ Found {it_students_count} IT students in database")
+
+        # Step 2: Check attendance data for IT students
+        cur.execute("""
+            SELECT s.rollno, s.name, s.current_semester, COUNT(a.id) as attendance_count
+            FROM students s
+            LEFT JOIN attendance a ON s.rollno = a.rollno
+            WHERE s.current_semester LIKE '%IT%'
+            GROUP BY s.rollno, s.name, s.current_semester
+            ORDER BY attendance_count DESC
+        """)
+        it_attendance_data = cur.fetchall()
+
+        results["data_analysis"]["it_students_with_attendance"] = []
+        total_it_attendance_records = 0
+
+        for row in it_attendance_data:
+            rollno, name, department, attendance_count = row
+            results["data_analysis"]["it_students_with_attendance"].append({
+                "rollno": rollno,
+                "name": name,
+                "department": department,
+                "attendance_records": attendance_count
+            })
+            total_it_attendance_records += attendance_count
+
+        results["steps"].append(f"✓ Total IT attendance records: {total_it_attendance_records}")
+
+        # Step 3: Check for IT students with no attendance
+        it_students_no_attendance = [student for student in it_attendance_data if student[3] == 0]
+        results["steps"].append(f"✓ IT students with no attendance: {len(it_students_no_attendance)}")
+
+        # Step 4: Check attendance sheet structure
+        try:
+            # Get a sample of attendance data to analyze patterns
+            cur.execute("""
+                SELECT DISTINCT rollno, date, status
+                FROM attendance
+                WHERE rollno IN (SELECT rollno FROM students WHERE current_semester LIKE '%IT%')
+                ORDER BY date DESC
+                LIMIT 10
+            """)
+            sample_attendance = cur.fetchall()
+
+            if sample_attendance:
+                results["data_analysis"]["sample_it_attendance"] = [
+                    {"rollno": row[0], "date": row[1], "status": row[2]}
+                    for row in sample_attendance
+                ]
+                results["steps"].append("✓ Sample IT attendance data found")
+            else:
+                results["steps"].append("✗ No IT attendance data found in database")
+
+        except Exception as e:
+            results["errors"].append(f"Error analyzing attendance data: {e}")
+
+        # Step 5: Check for roll number mismatches
+        cur.execute("""
+            SELECT s.rollno as student_rollno, a.rollno as attendance_rollno
+            FROM students s
+            LEFT JOIN attendance a ON s.rollno = a.rollno
+            WHERE s.current_semester LIKE '%IT%'
+            AND (a.rollno IS NULL OR s.rollno != a.rollno)
+            LIMIT 5
+        """)
+        rollno_mismatches = cur.fetchall()
+
+        if rollno_mismatches:
+            results["data_analysis"]["rollno_mismatches"] = [
+                {"student_rollno": row[0], "attendance_rollno": row[1]}
+                for row in rollno_mismatches
+            ]
+            results["steps"].append("⚠ Potential roll number mismatches found")
+        else:
+            results["steps"].append("✓ No obvious roll number mismatches")
+
+        # Step 6: Check unique statuses for IT students
+        cur.execute("""
+            SELECT DISTINCT status
+            FROM attendance
+            WHERE rollno IN (SELECT rollno FROM students WHERE current_semester LIKE '%IT%')
+            AND status IS NOT NULL AND status != ''
+        """)
+        unique_statuses = cur.fetchall()
+
+        if unique_statuses:
+            results["data_analysis"]["it_unique_statuses"] = [row[0] for row in unique_statuses]
+            results["steps"].append(f"✓ Found unique statuses for IT students: {results['data_analysis']['it_unique_statuses']}")
+        else:
+            results["steps"].append("✗ No status values found for IT students")
+
+        conn_local.close()
+        results["success"] = True
+
+    except Exception as e:
+        results["errors"].append(f"Error in IT attendance analysis: {e}")
+
+    return jsonify(results)
 if __name__ == '__main__':
     # Startup summary
     try:
