@@ -93,11 +93,7 @@
       <div class="space-y-6">
         <div class="glass-dark neon-border p-6">
           <h1 class="text-2xl font-bold text-white mb-2">${hodDepartment} Department - HOD Dashboard</h1>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-            <div class="bg-white/5 rounded p-3">
-              <div class="text-3xl font-bold text-blue-400">${departmentStudents.length}</div>
-              <div class="text-sm text-gray-400">Total Students</div>
-            </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
             <div class="bg-white/5 rounded p-3">
               <div class="text-3xl font-bold text-pink-400">${aimlCount}</div>
               <div class="text-sm text-gray-400">AI & ML Students</div>
@@ -221,15 +217,25 @@
         </div>
       </div>`;
 
+
     const coursesContent = `
 <div class="container mx-auto">
-  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
-  <div class="glass-dark neon-border p-6">
-    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
-    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
-    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+      <i class="fas fa-book-open text-purple-400 mr-3"></i>
+      Course List
+    </h2>
+    <div id="courses-loading" class="text-sm text-purple-300">
+      <i class="fas fa-spinner fa-spin mr-2"></i>Loading courses...
+    </div>
   </div>
- </div>`;
+  <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  <div id="courses-empty" class="glass-dark neon-border p-12 text-center hidden">
+    <i class="fas fa-book text-6xl text-white/20 mb-4"></i>
+    <p class="text-white/60 text-lg">No courses found.</p>
+  </div>
+</div>
+`;
     const passesContent = `
     <div class="container mx-auto">
       <div class="flex items-center justify-between mb-4">
@@ -317,17 +323,30 @@
       try{
         const deptSel = document.getElementById('dept-filter');
         const dept = deptSel ? (deptSel.value || '') : '';
-        const data = await fetch('/hod/all_students_attendance_averages').then(r=>r.json());
+        const response = await fetch('/hod/all_students_attendance_averages');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Attendance data received:', data); // Debug log
         let students = data?.students||[];
         if (dept) students = students.filter(s => (s.current_semester||s.class||'') === dept);
-        tbodyEl.innerHTML = students.map(s=>{
-          const pct=Number(s.attendance_average||0); let color='text-red-400', bg='bg-red-900/20', status='Poor';
-          if(pct>=90){color='text-green-400';bg='bg-green-900/20';status='Excellent';}
-          else if(pct>=75){color='text-blue-400';bg='bg-blue-900/20';status='Good';}
-          else if(pct>=60){color='text-yellow-400';bg='bg-yellow-900/20';status='Fair';}
-          return `<tr class="border-b border-white/10"><td class="px-6 py-4 text-sm text-on-dark">${s.reg_no||'-'}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.name}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.rollno}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.present_days}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.total_days}</td><td class="px-6 py-4 text-sm font-semibold ${color}">${pct.toFixed(2)}%</td><td class="px-6 py-4"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bg} ${color}">${status}</span></td></tr>`;
-        }).join('');
-      }catch(e){ if (errorEl){ errorEl.textContent='Error loading attendance.'; errorEl.classList.remove('hidden'); } }
+        if (students.length === 0) {
+          tbodyEl.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-400">No attendance data available</td></tr>';
+        } else {
+          tbodyEl.innerHTML = students.map(s=>{
+            const pct=Number(s.attendance_average||0); let color='text-red-400', bg='bg-red-900/20', status='Poor';
+            if(pct>=90){color='text-green-400';bg='bg-green-900/20';status='Excellent';}
+            else if(pct>=75){color='text-blue-400';bg='bg-blue-900/20';status='Good';}
+            else if(pct>=60){color='text-yellow-400';bg='bg-yellow-900/20';status='Fair';}
+            return `<tr class="border-b border-white/10"><td class="px-6 py-4 text-sm text-on-dark">${s.reg_no||'-'}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.name||'-'}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.rollno||'-'}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.present_days||0}</td><td class="px-6 py-4 text-sm muted-on-dark">${s.total_days||0}</td><td class="px-6 py-4 text-sm font-semibold ${color}">${pct.toFixed(2)}%</td><td class="px-6 py-4"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bg} ${color}">${status}</span></td></tr>`;
+          }).join('');
+        }
+      }catch(e){ 
+        console.error('Error loading attendance:', e);
+        if (errorEl){ errorEl.textContent=`Error loading attendance: ${e.message}`; errorEl.classList.remove('hidden'); }
+        if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-red-400">Error loading attendance data</td></tr>';
+      }
       finally{ if (loadingEl) loadingEl.classList.add('hidden'); }
     }
 
@@ -350,43 +369,98 @@
       }).join('')}</tr>`).join('');
     }
 
+
     async function populateHodDeptSelect(){
       try{
-        const depts = await fetch('/departments').then(r=>r.json());
         const sel = document.getElementById('hod-dept-filter');
         if (!sel) return;
-        sel.innerHTML = `<option value="">All</option>` + (depts||[]).map(d=>`<option value="${d}">${d}</option>`).join('');
-        sel.onchange = async ()=>{
-          const q = sel.value? `?dept=${encodeURIComponent(sel.value)}`: '';
-          const res = await fetch('/students'+q);
-          const data = await res.json();
-          allStudents = Array.isArray(data)? data: [];
-          renderTable();
-        };
+        // HOD can only see their own department
+        sel.innerHTML = `<option value="">${hodDepartment || 'Your Department'}</option>`;
+        sel.disabled = true; // Disable the selector
+      }catch(e){}
+    }
+
+    async function populateDeptSelect(selectId){
+      try{
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        // HOD can only see their own department - no filter needed
+        sel.innerHTML = `<option value="">${hodDepartment || 'Your Department'}</option>`;
+        sel.disabled = true; // Disable the selector for HOD
       }catch(e){}
     }
 
     async function loadCourses(){
-      const ul = document.getElementById('courses-list');
+      const grid = document.getElementById('courses-grid');
       const loading = document.getElementById('courses-loading');
       const empty = document.getElementById('courses-empty');
-      if (!ul) return;
+      if (!grid) return;
       try{
         const res = await fetch('/courses');
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0){
           if (empty) empty.classList.remove('hidden');
-          ul.innerHTML = '';
+          grid.innerHTML = '';
           return;
         }
-        ul.innerHTML = data.map(c => `
-          <li>
-            <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
-            <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
-          </li>
-        `).join('');
+        
+        const getIcon = (courseName) => {
+          const name = (courseName || '').toLowerCase();
+          if (name.includes('python') || name.includes('programming')) return 'fa-code';
+          if (name.includes('data') || name.includes('database')) return 'fa-database';
+          if (name.includes('web') || name.includes('html')) return 'fa-globe';
+          if (name.includes('machine') || name.includes('ai')) return 'fa-robot';
+          if (name.includes('network')) return 'fa-network-wired';
+          if (name.includes('security') || name.includes('cyber')) return 'fa-shield-alt';
+          if (name.includes('cloud')) return 'fa-cloud';
+          if (name.includes('mobile') || name.includes('android')) return 'fa-mobile-alt';
+          return 'fa-book';
+        };
+        
+        const gradients = [
+          'from-purple-600 to-pink-600',
+          'from-blue-600 to-cyan-600',
+          'from-green-600 to-teal-600',
+          'from-orange-600 to-red-600',
+          'from-indigo-600 to-purple-600',
+          'from-pink-600 to-rose-600'
+        ];
+        
+        grid.innerHTML = data.map((c, index) => {
+          const gradient = gradients[index % gradients.length];
+          const icon = getIcon(c.course_name);
+          return `
+            <div class="glass-dark neon-border rounded-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div class="bg-gradient-to-r ${gradient} p-4 relative overflow-hidden">
+                <div class="absolute top-0 right-0 opacity-10">
+                  <i class="fas ${icon} text-8xl"></i>
+                </div>
+                <div class="relative z-10">
+                  <i class="fas ${icon} text-3xl text-white mb-2"></i>
+                  <h3 class="text-lg font-bold text-white line-clamp-2">${c.course_name || c.course_code}</h3>
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-3">
+                  <i class="fas fa-hashtag text-purple-400 mr-2"></i>
+                  <span class="text-sm text-white/70 font-mono">${c.course_code || 'N/A'}</span>
+                </div>
+                <a href="${c.drive_link}" target="_blank" rel="noopener"
+                   class="block w-full bg-gradient-to-r ${gradient} hover:opacity-90 text-white text-center py-2 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+                  <i class="fas fa-external-link-alt mr-2"></i>
+                  Open Course Materials
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
       } catch (e){
-        ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+        grid.innerHTML = `
+          <div class="col-span-full glass-dark neon-border p-6 text-center">
+            <i class="fas fa-exclamation-triangle text-red-400 text-4xl mb-3"></i>
+            <p class="text-red-400">Error loading courses.</p>
+          </div>
+        `;
       } finally {
         if (loading) loading.classList.add('hidden');
       }
@@ -453,9 +527,9 @@
             }
           }, 0);
           break;
-        case 'view': render(deptStudentsContent); setTimeout(async ()=>{ await populateHodDeptSelect(); const sel=document.getElementById('hod-dept-filter'); if (sel){ // default load based on current dept
-              const q = sel.value? `?dept=${encodeURIComponent(sel.value)}`: '';
-              const data = await fetch('/students'+q).then(r=>r.json());
+        case 'view': render(deptStudentsContent); setTimeout(async ()=>{ await populateHodDeptSelect(); const sel=document.getElementById('hod-dept-filter'); if (sel){ // default load based on current dept - HOD restricted to own department
+              sel.disabled = true; // Disable department selector for HOD
+              const data = await fetch('/students').then(r=>r.json());
               allStudents = Array.isArray(data)? data: [];
             }
             renderTable();

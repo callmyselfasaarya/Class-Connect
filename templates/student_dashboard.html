@@ -169,7 +169,8 @@
       <button class="sidebar-button" data-page="dashboard"><i class="fas fa-home"></i><span class="label">Dashboard</span></button>
       <button class="sidebar-button" data-page="profile"><i class="fas fa-user-graduate"></i><span class="label">My Profile</span></button>
       <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Courses</span></button>
-      <button class="sidebar-button" data-page="outpass"><i class="fas fa-ticket"></i><span class="label">Out Pass</span></button>
+      <button class="sidebar-button" data-page="outpass"><i class="fas fa-ticket"></i><span class="label">Out Pass</span><span id="expired-badge" class="hidden ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">0</span></button>
+      <button class="sidebar-button" data-page="leave"><i class="fas fa-calendar-alt"></i><span class="label">Leave Request</span><span id="leave-notif-badge" class="hidden ml-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">0</span></button>
       <button class="sidebar-button mt-8 w-full flex items-center justify-start text-red-500" id="logout-btn">
         <i class="fas fa-sign-out-alt mr-2"></i>
         <span class="label">Logout</span>
@@ -268,8 +269,28 @@
     });
   });
 
+  // Track which badges have been viewed
+  let outpassBadgeViewed = false;
+  let leaveBadgeViewed = false;
+
   // Navigation handler
   function handleNavigation(page) {
+    // Clear notification badges when viewing the respective pages
+    if (page === 'outpass') {
+      const expiredBadge = document.getElementById('expired-badge');
+      if (expiredBadge) {
+        expiredBadge.classList.add('hidden');
+        outpassBadgeViewed = true;
+      }
+    }
+    if (page === 'leave') {
+      const leaveBadge = document.getElementById('leave-notif-badge');
+      if (leaveBadge) {
+        leaveBadge.classList.add('hidden');
+        leaveBadgeViewed = true;
+      }
+    }
+    
     switch (page) {
       case "dashboard":
         showDashboard();
@@ -282,6 +303,9 @@
         break;
       case "outpass":
         showOutPass();
+        break;
+      case "leave":
+        showLeaveRequest();
         break;
       default:
         showDashboard();
@@ -302,6 +326,20 @@
                   <div class="h-4 bg-gray-300 rounded w-1/4"></div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expired Pass Alert -->
+        <div id="dashboard-expired-alert" class="hidden glass rounded-lg p-4 border-l-4 border-red-500">
+          <div class="flex items-start">
+            <i class="fas fa-exclamation-circle text-red-500 text-2xl mr-3 mt-1"></i>
+            <div class="flex-1">
+              <h3 class="text-lg font-bold text-red-400 mb-2">⚠️ OUT PASS EXPIRED!</h3>
+              <div id="expired-pass-details" class="text-white/90 text-sm space-y-1"></div>
+              <button onclick="showOutPass()" class="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">
+                <i class="fas fa-eye mr-2"></i>View Details
+              </button>
             </div>
           </div>
         </div>
@@ -366,6 +404,51 @@
       </div>
     `;
     loadAttendanceSummary();
+    checkExpiredPassesOnDashboard();
+  }
+
+  // Check for expired passes and show on dashboard
+  async function checkExpiredPassesOnDashboard() {
+    try {
+      const res = await fetch('/out_pass/expired');
+      const data = await res.json();
+      if (data.success && data.expired_passes && data.expired_passes.length > 0) {
+        const alertDiv = document.getElementById('dashboard-expired-alert');
+        const detailsDiv = document.getElementById('expired-pass-details');
+        
+        if (alertDiv && detailsDiv) {
+          alertDiv.classList.remove('hidden');
+          detailsDiv.innerHTML = data.expired_passes.slice(0, 3).map(p => `
+            <div class="bg-red-900/30 p-2 rounded">
+              <div class="font-semibold">${p.pass_type || 'Out Pass'}</div>
+              <div class="text-xs text-white/70">Expired: ${new Date(p.to_datetime).toLocaleString()}</div>
+            </div>
+          `).join('');
+          
+          if (data.expired_passes.length > 3) {
+            detailsDiv.innerHTML += `<div class="text-xs text-white/60 mt-2">+ ${data.expired_passes.length - 3} more expired passes</div>`;
+          }
+        }
+        
+        // Update badge
+        updateExpiredBadge(data.count);
+      }
+    } catch (e) {
+      console.error('Error checking expired passes:', e);
+    }
+  }
+
+  // Update expired pass badge
+  function updateExpiredBadge(count) {
+    const badge = document.getElementById('expired-badge');
+    if (badge && !outpassBadgeViewed) {
+      if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
   }
 
   function showViewStudent() {
@@ -386,11 +469,21 @@
 
   function showCourses() {
     document.getElementById('main-content').innerHTML = `
-      <div id="courses-content" class="glass rounded-lg p-6">
-        <h2 class="text-lg font-bold text-white">My Course List</h2>
-        <div id="courses-loading" class="text-sm text-white/70 mt-2">Loading courses...</div>
-        <ul class="list-disc pl-6 text-white space-y-2 mt-4" id="course-list"></ul>
-        <div id="courses-empty" class="text-white/70 mt-2 hidden">No courses found.</div>
+      <div class="container mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-semibold text-white flex items-center">
+            <i class="fas fa-book-open text-purple-400 mr-3"></i>
+            My Course List
+          </h2>
+          <div id="courses-loading" class="text-sm text-purple-300">
+            <i class="fas fa-spinner fa-spin mr-2"></i>Loading courses...
+          </div>
+        </div>
+        <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        <div id="courses-empty" class="glass rounded-lg p-12 text-center hidden">
+          <i class="fas fa-book text-6xl text-white/20 mb-4"></i>
+          <p class="text-white/60 text-lg">No courses found.</p>
+        </div>
       </div>
     `;
     loadCourses();
@@ -403,11 +496,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label class="text-sm text-white/80">Type</label>
-            <select id="op-type" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
-              <option value="out_pass">Out Pass</option>
-              <option value="od_pass">OD Pass</option>
-              <option value="emergency">Emergency</option>
-              <option value="other">Other</option>
+            <select id="op-type" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" style="color: white;">
+              <option value="out_pass" style="background-color: #1f2937; color: white;">Out Pass</option>
+              <option value="od_pass" style="background-color: #1f2937; color: white;">OD Pass</option>
+              <option value="emergency" style="background-color: #1f2937; color: white;">Emergency</option>
+              <option value="other" style="background-color: #1f2937; color: white;">Other</option>
             </select>
           </div>
           <div>
@@ -424,10 +517,10 @@
           <div id="od-extra" class="col-span-1 md:col-span-2 hidden grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label class="text-sm text-white/80">OD Duration</label>
-              <select id="od-duration" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white">
-                <option value="half_day">Half Day</option>
-                <option value="full_day">Full Day</option>
-                <option value="n_days">N Days</option>
+              <select id="od-duration" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" style="color: white;">
+                <option value="half_day" style="background-color: #1f2937; color: white;">Half Day</option>
+                <option value="full_day" style="background-color: #1f2937; color: white;">Full Day</option>
+                <option value="n_days" style="background-color: #1f2937; color: white;">N Days</option>
               </select>
             </div>
             <div>
@@ -477,18 +570,34 @@
     }
     // Click-to-view modal for approved pass
     const showPassModal = (p) => {
+      const now = new Date();
+      const endTime = p.to_datetime ? new Date(p.to_datetime) : null;
+      const isExpired = endTime && endTime < now;
+      const expiredWarning = isExpired ? `
+        <div class="bg-red-600 text-white p-4 rounded-lg mb-4 animate-pulse">
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
+            <div>
+              <div class="font-bold text-lg">⚠️ TIME EXPIRED!</div>
+              <div class="text-sm mt-1">This pass ended at ${endTime.toLocaleString()}</div>
+              <div class="text-xs mt-1 opacity-90">Please return to campus immediately if you haven't already</div>
+            </div>
+          </div>
+        </div>` : '';
+      
       const html = `
         <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" id="op-modal">
           <div class="glass rounded-xl p-6 w-full max-w-lg relative">
             <button class="absolute top-3 right-3 text-white/80" onclick="document.getElementById('op-modal').remove()">✕</button>
             <h3 class="text-xl font-semibold text-white mb-4">Approved Out Pass</h3>
+            ${expiredWarning}
             <div class="space-y-2 text-white/90">
               <div><span class="text-white/70">Name:</span> ${p.requester_name||''}</div>
               <div><span class="text-white/70">Roll No:</span> ${p.rollno||''}</div>
               <div><span class="text-white/70">Department:</span> ${p.department||''}</div>
               <div><span class="text-white/70">Type:</span> ${p.pass_type||''}</div>
               <div><span class="text-white/70">From:</span> ${p.from_datetime||''}</div>
-              <div><span class="text-white/70">To:</span> ${p.to_datetime||''}</div>
+              <div><span class="text-white/70">To:</span> ${p.to_datetime||''} ${isExpired ? '<span class="text-red-400 font-bold ml-2">EXPIRED</span>' : ''}</div>
               <div><span class="text-white/70">Advisor:</span> ${p.advisor_status||'-'} ${p.advisor_remarks? '('+p.advisor_remarks+')':''}</div>
               <div><span class="text-white/70">HOD:</span> ${p.hod_status||'-'} ${p.hod_remarks? '('+p.hod_remarks+')':''}</div>
               <div><span class="text-white/70">Final Status:</span> ${p.status||''}</div>
@@ -511,35 +620,94 @@
       });
     };
     
-    // Function to show expired pass alert
+    // Function to show expired pass alert with return confirmation
     const showExpiredPassAlert = (pass) => {
+      // Check if already confirmed
+      if (pass.returned_to_campus === 'yes') return;
+      
       const alertHtml = `
-        <div class="fixed top-4 right-4 bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse" id="pass-expiry-alert">
-          <div class="flex items-center space-x-3">
-            <i class="fas fa-exclamation-triangle text-2xl"></i>
-            <div>
-              <div class="font-bold text-lg">OUT PASS TIME EXPIRED!</div>
-              <div class="text-sm mt-1">Your ${pass.pass_type} has ended at ${new Date(pass.to_datetime).toLocaleString()}</div>
-              <div class="text-xs mt-2 opacity-90">Please return to campus immediately</div>
+        <div class="fixed top-4 right-4 bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50" id="pass-expiry-alert-${pass.id}">
+          <div class="space-y-3">
+            <div class="flex items-start space-x-3">
+              <i class="fas fa-exclamation-triangle text-3xl animate-pulse"></i>
+              <div class="flex-1">
+                <div class="font-bold text-lg">⚠️ OUT PASS TIME EXPIRED!</div>
+                <div class="text-sm mt-1">Your ${pass.pass_type} ended at ${new Date(pass.to_datetime).toLocaleString()}</div>
+              </div>
+              <button onclick="document.getElementById('pass-expiry-alert-${pass.id}').remove()" class="text-white hover:text-red-200">
+                <i class="fas fa-times"></i>
+              </button>
             </div>
-            <button onclick="document.getElementById('pass-expiry-alert').remove()" class="text-white hover:text-red-200 ml-4">
-              <i class="fas fa-times"></i>
-            </button>
+            
+            <div class="border-t border-white/30 pt-3">
+              <div class="font-semibold mb-2">Are you back on campus?</div>
+              <div class="flex gap-2">
+                <button onclick="confirmReturn(${pass.id}, 'yes')" 
+                  class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-medium transition-all">
+                  <i class="fas fa-check mr-1"></i> Yes, I'm Back
+                </button>
+                <button onclick="confirmReturn(${pass.id}, 'no')" 
+                  class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded font-medium transition-all">
+                  <i class="fas fa-times mr-1"></i> Not Yet
+                </button>
+              </div>
+              <div class="text-xs mt-2 opacity-75">Your advisor will be notified of your response</div>
+            </div>
           </div>
         </div>`;
       
-      // Remove any existing alerts first
-      const existingAlert = document.getElementById('pass-expiry-alert');
+      // Remove any existing alert for this pass
+      const existingAlert = document.getElementById(`pass-expiry-alert-${pass.id}`);
       if (existingAlert) existingAlert.remove();
       
       // Add the new alert
       document.body.insertAdjacentHTML('beforeend', alertHtml);
-      
-      // Auto-remove after 10 seconds
-      setTimeout(() => {
-        const alert = document.getElementById('pass-expiry-alert');
-        if (alert) alert.remove();
-      }, 10000);
+    };
+    
+    // Confirm return to campus
+    window.confirmReturn = async function(passId, returned) {
+      try {
+        const res = await fetch(`/out_pass/${passId}/confirm_return`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ returned: returned })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          // Remove the alert
+          const alert = document.getElementById(`pass-expiry-alert-${passId}`);
+          if (alert) alert.remove();
+          
+          // Show success message
+          const message = returned === 'yes' 
+            ? '✅ Thank you! Your advisor has been notified that you are back on campus.'
+            : '⚠️ Please return to campus as soon as possible. Your advisor has been notified.';
+          
+          const successHtml = `
+            <div class="fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl z-50" id="return-success">
+              <div class="flex items-center space-x-3">
+                <i class="fas fa-check-circle text-2xl"></i>
+                <div>${message}</div>
+                <button onclick="document.getElementById('return-success').remove()" class="text-white hover:text-green-200 ml-4">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>`;
+          
+          document.body.insertAdjacentHTML('beforeend', successHtml);
+          
+          // Auto-remove after 5 seconds
+          setTimeout(() => {
+            const successAlert = document.getElementById('return-success');
+            if (successAlert) successAlert.remove();
+          }, 5000);
+        }
+      } catch (e) {
+        console.error('Error confirming return:', e);
+        alert('Error updating return status. Please try again.');
+      }
     };
     
     const refreshList = async () => {
@@ -622,29 +790,100 @@
     setInterval(() => {
       refreshList();
     }, 60000); // Check every 60 seconds
+    
+    // Update badge when on out pass page
+    const updateBadgeFromList = async () => {
+      try {
+        const res = await fetch('/out_pass/expired');
+        const data = await res.json();
+        if (data.success) {
+          updateExpiredBadge(data.count);
+        }
+      } catch (e) {
+        console.error('Error updating badge:', e);
+      }
+    };
+    updateBadgeFromList();
   }
 
   async function loadCourses(){
-    const ul = document.getElementById('course-list');
+    const grid = document.getElementById('courses-grid');
     const loading = document.getElementById('courses-loading');
     const empty = document.getElementById('courses-empty');
-    if (!ul) return;
+    if (!grid) return;
     try{
       const res = await fetch('/courses');
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0){
         if (empty) empty.classList.remove('hidden');
-        ul.innerHTML = '';
+        grid.innerHTML = '';
         return;
       }
-      ul.innerHTML = data.map(c => `
-        <li>
-          <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
-          <span class="text-sm text-white/60 ml-2">${c.course_code || ''}</span>
-        </li>
-      `).join('');
+      
+      // Course card icons based on course name
+      const getIcon = (courseName) => {
+        const name = (courseName || '').toLowerCase();
+        if (name.includes('python') || name.includes('programming')) return 'fa-code';
+        if (name.includes('data') || name.includes('database')) return 'fa-database';
+        if (name.includes('web') || name.includes('html')) return 'fa-globe';
+        if (name.includes('machine') || name.includes('ai')) return 'fa-robot';
+        if (name.includes('network')) return 'fa-network-wired';
+        if (name.includes('security') || name.includes('cyber')) return 'fa-shield-alt';
+        if (name.includes('cloud')) return 'fa-cloud';
+        if (name.includes('mobile') || name.includes('android')) return 'fa-mobile-alt';
+        return 'fa-book';
+      };
+      
+      // Generate gradient colors
+      const gradients = [
+        'from-purple-600 to-pink-600',
+        'from-blue-600 to-cyan-600',
+        'from-green-600 to-teal-600',
+        'from-orange-600 to-red-600',
+        'from-indigo-600 to-purple-600',
+        'from-pink-600 to-rose-600'
+      ];
+      
+      grid.innerHTML = data.map((c, index) => {
+        const gradient = gradients[index % gradients.length];
+        const icon = getIcon(c.course_name);
+        return `
+          <div class="glass rounded-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <!-- Course Header with Gradient -->
+            <div class="bg-gradient-to-r ${gradient} p-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 opacity-10">
+                <i class="fas ${icon} text-8xl"></i>
+              </div>
+              <div class="relative z-10">
+                <i class="fas ${icon} text-3xl text-white mb-2"></i>
+                <h3 class="text-lg font-bold text-white line-clamp-2">${c.course_name || c.course_code}</h3>
+              </div>
+            </div>
+            
+            <!-- Course Body -->
+            <div class="p-4">
+              <div class="flex items-center mb-3">
+                <i class="fas fa-hashtag text-purple-400 mr-2"></i>
+                <span class="text-sm text-white/70 font-mono">${c.course_code || 'N/A'}</span>
+              </div>
+              
+              <!-- Action Button -->
+              <a href="${c.drive_link}" target="_blank" rel="noopener"
+                 class="block w-full bg-gradient-to-r ${gradient} hover:opacity-90 text-white text-center py-2 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+                <i class="fas fa-external-link-alt mr-2"></i>
+                Open Course Materials
+              </a>
+            </div>
+          </div>
+        `;
+      }).join('');
     } catch(e){
-      ul.innerHTML = '<li class="text-red-300">Error loading courses.</li>';
+      grid.innerHTML = `
+        <div class="col-span-full glass rounded-lg p-6 text-center">
+          <i class="fas fa-exclamation-triangle text-red-400 text-4xl mb-3"></i>
+          <p class="text-red-400">Error loading courses.</p>
+        </div>
+      `;
     } finally {
       if (loading) loading.classList.add('hidden');
     }
@@ -823,6 +1062,250 @@
       alert('Error loading student details');
     }
   }
+
+  // Leave Request Page
+  function showLeaveRequest() {
+    document.getElementById('main-content').innerHTML = `
+      <div class="container mx-auto">
+        <!-- Notification Alert -->
+        <div id="leave-notification-alert" class="hidden mb-6 glass-dark neon-border p-4 rounded-lg">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-bell text-green-400 text-2xl"></i>
+            <div class="flex-1">
+              <div class="font-bold text-white text-lg mb-2">Leave Request Updates</div>
+              <div id="leave-notification-details" class="space-y-2"></div>
+            </div>
+            <button onclick="document.getElementById('leave-notification-alert').classList.add('hidden')" class="text-white/60 hover:text-white">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+            <i class="fas fa-calendar-alt text-blue-400 mr-3"></i>
+            Leave Request
+          </h2>
+          <button onclick="openLeaveRequestForm()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white px-4 py-2 rounded-lg font-medium transition-all">
+            <i class="fas fa-plus mr-2"></i>Request Leave
+          </button>
+        </div>
+
+        <div class="glass-dark neon-border overflow-hidden">
+          <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+            <table class="min-w-full table-glass">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Leave Type</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">From Date</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">To Date</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Reason</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Remarks</th>
+                </tr>
+              </thead>
+              <tbody id="leave-requests-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+    loadLeaveRequests();
+    checkLeaveNotifications();
+  }
+
+  async function loadLeaveRequests() {
+    try {
+      const res = await fetch('/leave_request/my');
+      const data = await res.json();
+      const tbody = document.getElementById('leave-requests-tbody');
+      
+      if (data.success && data.leave_requests && data.leave_requests.length > 0) {
+        tbody.innerHTML = data.leave_requests.map(req => {
+          const statusColor = req.status === 'approved' ? 'text-green-400' : req.status === 'rejected' ? 'text-red-400' : 'text-yellow-400';
+          const statusIcon = req.status === 'approved' ? 'fa-check-circle' : req.status === 'rejected' ? 'fa-times-circle' : 'fa-clock';
+          
+          return `
+            <tr class="border-b border-white/5 hover:bg-white/5">
+              <td class="px-4 py-3 text-sm text-on-dark">${req.leave_type || '-'}</td>
+              <td class="px-4 py-3 text-sm text-on-dark">${req.from_date || '-'}</td>
+              <td class="px-4 py-3 text-sm text-on-dark">${req.to_date || '-'}</td>
+              <td class="px-4 py-3 text-sm text-on-dark max-w-xs truncate" title="${req.reason || '-'}">${req.reason || '-'}</td>
+              <td class="px-4 py-3 text-sm">
+                <span class="${statusColor} flex items-center">
+                  <i class="fas ${statusIcon} mr-1"></i>
+                  ${req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-sm text-on-dark max-w-xs truncate" title="${req.advisor_remarks || '-'}">${req.advisor_remarks || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-white/60">No leave requests found</td></tr>';
+      }
+    } catch (e) {
+      console.error('Error loading leave requests:', e);
+      document.getElementById('leave-requests-tbody').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-400">Error loading leave requests</td></tr>';
+    }
+  }
+
+  async function checkLeaveNotifications() {
+    try {
+      const res = await fetch('/leave_request/notifications');
+      const data = await res.json();
+      
+      if (data.success && data.notifications && data.notifications.length > 0) {
+        const alertDiv = document.getElementById('leave-notification-alert');
+        const detailsDiv = document.getElementById('leave-notification-details');
+        const badge = document.getElementById('leave-notif-badge');
+        
+        if (alertDiv && detailsDiv) {
+          alertDiv.classList.remove('hidden');
+          detailsDiv.innerHTML = data.notifications.slice(0, 3).map(notif => {
+            const isApproved = notif.status === 'approved';
+            const bgColor = isApproved ? 'bg-green-900/30' : 'bg-red-900/30';
+            const icon = isApproved ? 'fa-check-circle text-green-400' : 'fa-times-circle text-red-400';
+            
+            return `
+              <div class="${bgColor} p-3 rounded">
+                <div class="flex items-start gap-2">
+                  <i class="fas ${icon} mt-1"></i>
+                  <div class="flex-1">
+                    <div class="font-semibold text-white">${notif.leave_type} - ${isApproved ? 'Approved' : 'Rejected'}</div>
+                    <div class="text-xs text-white/70">${notif.from_date} to ${notif.to_date}</div>
+                    ${notif.advisor_remarks ? `<div class="text-xs text-white/60 mt-1">Remarks: ${notif.advisor_remarks}</div>` : ''}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+          
+          if (badge && !leaveBadgeViewed) {
+            badge.textContent = data.notifications.length;
+            badge.classList.remove('hidden');
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error checking leave notifications:', e);
+    }
+  }
+
+  window.openLeaveRequestForm = function() {
+    const formHtml = `
+      <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" id="leave-form-modal">
+        <div class="glass-dark neon-border rounded-xl p-6 w-full max-w-2xl relative">
+          <button class="absolute top-3 right-3 text-white/80 hover:text-white" onclick="document.getElementById('leave-form-modal').remove()">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+          
+          <h3 class="text-2xl font-semibold text-white mb-6 flex items-center">
+            <i class="fas fa-calendar-plus text-blue-400 mr-3"></i>
+            Request Leave
+          </h3>
+          
+          <form id="leave-request-form" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-white/80 mb-2">Leave Type</label>
+              <select id="leave-type" required class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-400" style="color: white;">
+                <option value="" style="background-color: #1f2937; color: white;">Select Leave Type</option>
+                <option value="Sick Leave" style="background-color: #1f2937; color: white;">Sick Leave</option>
+                <option value="Casual Leave" style="background-color: #1f2937; color: white;">Casual Leave</option>
+                <option value="Emergency Leave" style="background-color: #1f2937; color: white;">Emergency Leave</option>
+                <option value="Medical Leave" style="background-color: #1f2937; color: white;">Medical Leave</option>
+                <option value="Family Function" style="background-color: #1f2937; color: white;">Family Function</option>
+                <option value="Other" style="background-color: #1f2937; color: white;">Other</option>
+              </select>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-white/80 mb-2">From Date</label>
+                <input type="date" id="leave-from-date" required class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-400">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-white/80 mb-2">To Date</label>
+                <input type="date" id="leave-to-date" required class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-400">
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-white/80 mb-2">Reason</label>
+              <textarea id="leave-reason" required rows="4" placeholder="Please provide detailed reason for leave..." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-400 resize-none"></textarea>
+            </div>
+            
+            <div id="leave-error-message" class="hidden text-red-400 text-sm p-3 bg-red-900/20 rounded-lg border border-red-500/30"></div>
+            
+            <div class="flex gap-3 pt-4">
+              <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-lg font-medium transition-all">
+                <i class="fas fa-paper-plane mr-2"></i>Submit Request
+              </button>
+              <button type="button" onclick="document.getElementById('leave-form-modal').remove()" class="px-6 bg-white/10 hover:bg-white/20 text-white py-3 rounded-lg font-medium transition-all">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', formHtml);
+    
+    document.getElementById('leave-request-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const errorMsg = document.getElementById('leave-error-message');
+      errorMsg.classList.add('hidden');
+      
+      const leaveData = {
+        leave_type: document.getElementById('leave-type').value,
+        from_date: document.getElementById('leave-from-date').value,
+        to_date: document.getElementById('leave-to-date').value,
+        reason: document.getElementById('leave-reason').value
+      };
+      
+      // Validation
+      if (!leaveData.leave_type) {
+        errorMsg.textContent = '❌ Please select a leave type';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      if (!leaveData.from_date || !leaveData.to_date) {
+        errorMsg.textContent = '❌ Please select both from and to dates';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      if (!leaveData.reason || leaveData.reason.length < 10) {
+        errorMsg.textContent = '❌ Please provide a detailed reason (at least 10 characters)';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/leave_request/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(leaveData)
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          document.getElementById('leave-form-modal').remove();
+          alert('✅ Leave request submitted successfully! Your advisor will review it.');
+          loadLeaveRequests();
+        } else {
+          errorMsg.textContent = '❌ ' + (data.message || 'Failed to submit leave request');
+          errorMsg.classList.remove('hidden');
+        }
+      } catch (e) {
+        console.error('Error submitting leave request:', e);
+        errorMsg.textContent = '❌ Error submitting leave request. Please try again.';
+        errorMsg.classList.remove('hidden');
+      }
+    });
+  };
 
   document.addEventListener('DOMContentLoaded', function() {
     showDashboard();

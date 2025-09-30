@@ -199,6 +199,42 @@ def get_department_students(department):
     conn_local.close()
     return student_list
 
+def get_all_students():
+    """Get all students for Principal view"""
+    try:
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+        
+        cur.execute("SELECT * FROM students")
+        students = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        
+        student_list = []
+        for student in students:
+            student_dict = dict(zip(columns, student))
+            # Parse extra_json if present
+            extra = {}
+            if student_dict.get("extra_json"):
+                try:
+                    extra = json.loads(student_dict["extra_json"])
+                except Exception:
+                    extra = {}
+            # Merge extra fields
+            for k, v in extra.items():
+                if k not in student_dict or not student_dict[k]:
+                    student_dict[k] = v
+            # Remove sensitive fields
+            student_dict.pop("password_hash", None)
+            student_dict.pop("password_plain", None)
+            student_dict.pop("extra_json", None)
+            student_list.append(student_dict)
+        
+        conn_local.close()
+        return student_list
+    except Exception as e:
+        print(f"Error in get_all_students: {e}")
+        return []
+
 # -------------------------------
 # Attendance date resolution
 # -------------------------------
@@ -408,7 +444,7 @@ conn.commit()
 def ensure_outpasses_schema():
     required_cols = [
         'advisor_status','hod_status','advisor_user_id','advisor_remarks','hod_user_id','hod_remarks',
-        'od_duration','od_days','other_hours'
+        'od_duration','od_days','other_hours','returned_to_campus','return_confirmed_at'
     ]
     c.execute("PRAGMA table_info(out_passes)")
     existing = {row[1] for row in c.fetchall()}
@@ -416,6 +452,8 @@ def ensure_outpasses_schema():
         if col not in existing:
             try:
                 default_clause = "DEFAULT 'pending'" if col in ('advisor_status','hod_status') else ''
+                if col == 'returned_to_campus':
+                    default_clause = "DEFAULT 'no'"
                 c.execute(f"ALTER TABLE out_passes ADD COLUMN {col} TEXT {default_clause}")
                 conn.commit()
             except Exception as e:
@@ -430,6 +468,28 @@ CREATE TABLE IF NOT EXISTS courses (
     course_name TEXT,
     course_code TEXT UNIQUE,
     drive_link TEXT
+)
+''')
+conn.commit()
+
+# Create leave_requests table
+c.execute('''
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_user_id TEXT NOT NULL,
+    student_name TEXT,
+    rollno TEXT,
+    department TEXT,
+    leave_type TEXT,
+    from_date TEXT,
+    to_date TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'pending',
+    advisor_user_id TEXT,
+    advisor_remarks TEXT,
+    created_at INTEGER,
+    updated_at INTEGER,
+    notification_sent TEXT DEFAULT 'no'
 )
 ''')
 conn.commit()
@@ -2010,7 +2070,9 @@ def teacher_dashboard():
         day_scholars=day_scholars,
         outstaying_students=outstaying_students,
         today_absent=today_absent,
-        low_attendance=low_attendance
+        low_attendance=low_attendance,
+        it_count=it_count,
+        aiml_count=aiml_count
     )
 
 @app.route('/hod_dashboard')
@@ -2085,8 +2147,71 @@ def hod_dashboard():
         it_count=it_count,
         aiml_count=aiml_count
     )
+@app.route('/principal_dashboard')
+@login_required('principal')
 def principal_dashboard():
-    return render_template('principal_dashboard.html')
+    try:
+        # Get all students for Principal view
+        all_students = get_all_students() or []
+        
+        # Categorize students
+        hostellers = [s for s in all_students if (s.get('day_scholar_or_hosteller', '').lower() == 'hosteller')]
+        day_scholars = [s for s in all_students if (s.get('day_scholar_or_hosteller', '').lower() == 'day scholar')]
+        outstaying_students = [s for s in all_students if s.get('outside_staying_address')]
+        
+        # Get attendance lists for all students
+        today_absent = get_today_absent_students() or []
+        low_attendance = get_low_attendance_students(75) or []
+        
+        # Fetch courses
+        c.execute("SELECT * FROM courses")
+        courses = c.fetchall() or []
+        
+        # Compute overall department counts for IT and AI & ML
+        it_count = 0
+        aiml_count = 0
+        try:
+            conn_local = sqlite3.connect('school.db')
+            cur = conn_local.cursor()
+            cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UIT%' OR current_semester = 'IT'")
+            result = cur.fetchone()
+            it_count = int(result[0] or 0) if result else 0
+            cur.execute("SELECT COUNT(*) FROM students WHERE rollno LIKE '323UAM%' OR current_semester = 'AI & ML'")
+            result = cur.fetchone()
+            aiml_count = int(result[0] or 0) if result else 0
+            conn_local.close()
+        except Exception as e:
+            print(f"Error computing counts: {e}")
+            it_count = 0
+            aiml_count = 0
+        
+        return render_template(
+            'principal_dashboard.html',
+            all_students=all_students,
+            hostellers=hostellers,
+            day_scholars=day_scholars,
+            outstaying_students=outstaying_students,
+            today_absent=today_absent,
+            low_attendance=low_attendance,
+            courses=courses,
+            it_count=it_count,
+            aiml_count=aiml_count
+        )
+    except Exception as e:
+        print(f"Error in principal_dashboard: {e}")
+        # Return minimal data to avoid JSON serialization errors
+        return render_template(
+            'principal_dashboard.html',
+            all_students=[],
+            hostellers=[],
+            day_scholars=[],
+            outstaying_students=[],
+            today_absent=[],
+            low_attendance=[],
+            courses=[],
+            it_count=0,
+            aiml_count=0
+        )
 
 @app.route('/student_dashboard')
 @login_required('student')
@@ -2130,10 +2255,8 @@ def get_students():
         else:
             cur.execute("SELECT * FROM students")
     elif role == 'hod':
-        # HOD can also query any department via ?dept=, default to own department
-        if q_dept:
-            cur.execute("SELECT * FROM students WHERE current_semester = ?", (q_dept,))
-        elif dept:
+        # HOD can ONLY see their own department (no cross-department access)
+        if dept:
             if dept == 'IT':
                 cur.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UIT%'", (dept,))
             elif dept == 'AI & ML':
@@ -2410,6 +2533,290 @@ def list_my_out_passes():
     rows = cur.fetchall()
     conn_local.close()
     return jsonify({'success': True, 'passes': [dict(r) for r in rows]})
+
+@app.route('/out_pass/<int:pass_id>/confirm_return', methods=['POST'])
+@login_required('student')
+def confirm_return_to_campus(pass_id: int):
+    """Student confirms they have returned to campus after out pass expired"""
+    data = request.get_json() or {}
+    returned = (data.get('returned') or '').strip().lower()  # 'yes' or 'no'
+    
+    if returned not in ('yes', 'no'):
+        return jsonify({'success': False, 'message': 'Invalid response'}), 400
+    
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    
+    # Verify this pass belongs to the current student
+    cur.execute("SELECT requester_user_id FROM out_passes WHERE id=?", (pass_id,))
+    row = cur.fetchone()
+    if not row or row[0] != session.get('user'):
+        conn_local.close()
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    
+    # Update the return status
+    from datetime import datetime
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    cur.execute("""
+        UPDATE out_passes 
+        SET returned_to_campus=?, return_confirmed_at=? 
+        WHERE id=?
+    """, (returned, now_str, pass_id))
+    
+    conn_local.commit()
+    conn_local.close()
+    
+    return jsonify({'success': True, 'message': 'Return status updated'})
+
+@app.route('/out_pass/expired', methods=['GET'])
+@login_required_any(('student', 'teacher', 'hod', 'admin'))
+def get_expired_passes():
+    """Get all expired out passes for the current user (student) or department (teacher/HOD)"""
+    role = session.get('role', '').lower()
+    user_id = session.get('user')
+    
+    conn_local = sqlite3.connect('school.db')
+    conn_local.row_factory = sqlite3.Row
+    cur = conn_local.cursor()
+    
+    if role == 'student':
+        # Get student's own expired passes
+        cur.execute("""
+            SELECT * FROM out_passes 
+            WHERE requester_user_id=? 
+            AND status='approved' 
+            AND to_datetime IS NOT NULL 
+            AND to_datetime != ''
+            ORDER BY to_datetime DESC
+        """, (user_id,))
+    elif role in ('teacher', 'hod'):
+        # Get expired passes for the teacher's/HOD's department
+        cur.execute("SELECT department FROM teachers WHERE user_id=?", (user_id,))
+        row = cur.fetchone()
+        dept = (row[0] or '').strip() if row and row[0] else None
+        
+        if dept:
+            cur.execute("""
+                SELECT * FROM out_passes 
+                WHERE department=? 
+                AND status='approved' 
+                AND to_datetime IS NOT NULL 
+                AND to_datetime != ''
+                ORDER BY to_datetime DESC
+            """, (dept,))
+        else:
+            cur.execute("""
+                SELECT * FROM out_passes 
+                WHERE status='approved' 
+                AND to_datetime IS NOT NULL 
+                AND to_datetime != ''
+                ORDER BY to_datetime DESC
+            """)
+    else:
+        # Admin/Principal can see all
+        cur.execute("""
+            SELECT * FROM out_passes 
+            WHERE status='approved' 
+            AND to_datetime IS NOT NULL 
+            AND to_datetime != ''
+            ORDER BY to_datetime DESC
+        """)
+    
+    rows = cur.fetchall()
+    conn_local.close()
+    
+    # Filter expired passes (where to_datetime < now)
+    from datetime import datetime
+    now = datetime.now()
+    expired = []
+    
+    for row in rows:
+        pass_dict = dict(row)
+        to_dt_str = pass_dict.get('to_datetime', '')
+        if to_dt_str:
+            try:
+                # Try multiple datetime formats
+                to_dt = None
+                for fmt in ['%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M']:
+                    try:
+                        to_dt = datetime.strptime(to_dt_str, fmt)
+                        break
+                    except:
+                        continue
+                
+                if to_dt and to_dt < now:
+                    expired.append(pass_dict)
+            except:
+                pass
+    
+    return jsonify({'success': True, 'expired_passes': expired, 'count': len(expired)})
+
+# ==================== LEAVE REQUEST ROUTES ====================
+
+@app.route('/leave_request/create', methods=['POST'])
+@login_required('student')
+def create_leave_request():
+    """Student creates a leave request"""
+    try:
+        data = request.get_json() or {}
+        leave_type = (data.get('leave_type') or '').strip()
+        from_date = (data.get('from_date') or '').strip()
+        to_date = (data.get('to_date') or '').strip()
+        reason = (data.get('reason') or '').strip()
+        
+        if not all([leave_type, from_date, to_date, reason]):
+            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        
+        user_id = session.get('user')
+        
+        # Get student details
+        conn_local = sqlite3.connect('school.db')
+        cur = conn_local.cursor()
+        cur.execute("SELECT name, rollno, current_semester FROM students WHERE user_id=?", (user_id,))
+        student = cur.fetchone()
+        
+        if not student:
+            conn_local.close()
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+        
+        student_name, rollno, department = student
+        
+        # Insert leave request
+        from datetime import datetime
+        now_epoch = int(datetime.now().timestamp())
+        
+        cur.execute("""
+            INSERT INTO leave_requests 
+            (student_user_id, student_name, rollno, department, leave_type, from_date, to_date, reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, student_name, rollno, department, leave_type, from_date, to_date, reason, now_epoch, now_epoch))
+        
+        conn_local.commit()
+        leave_id = cur.lastrowid
+        conn_local.close()
+        
+        return jsonify({'success': True, 'message': 'Leave request submitted successfully', 'leave_id': leave_id})
+    except Exception as e:
+        print(f"Error creating leave request: {e}")
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+@app.route('/leave_request/my', methods=['GET'])
+@login_required('student')
+def get_my_leave_requests():
+    """Get student's own leave requests"""
+    user_id = session.get('user')
+    
+    conn_local = sqlite3.connect('school.db')
+    conn_local.row_factory = sqlite3.Row
+    cur = conn_local.cursor()
+    
+    cur.execute("""
+        SELECT * FROM leave_requests 
+        WHERE student_user_id=? 
+        ORDER BY created_at DESC
+    """, (user_id,))
+    
+    rows = cur.fetchall()
+    conn_local.close()
+    
+    return jsonify({'success': True, 'leave_requests': [dict(r) for r in rows]})
+
+@app.route('/leave_request/pending', methods=['GET'])
+@login_required_any(('teacher', 'hod', 'admin'))
+def get_pending_leave_requests():
+    """Get pending leave requests for teacher/advisor"""
+    role = session.get('role', '').lower()
+    user_id = session.get('user')
+    
+    conn_local = sqlite3.connect('school.db')
+    conn_local.row_factory = sqlite3.Row
+    cur = conn_local.cursor()
+    
+    if role in ('teacher', 'hod'):
+        # Get teacher's department
+        cur.execute("SELECT department FROM teachers WHERE user_id=?", (user_id,))
+        row = cur.fetchone()
+        dept = (row[0] or '').strip() if row and row[0] else None
+        
+        if dept:
+            cur.execute("""
+                SELECT * FROM leave_requests 
+                WHERE status='pending' AND department=? 
+                ORDER BY created_at DESC
+            """, (dept,))
+        else:
+            cur.execute("""
+                SELECT * FROM leave_requests 
+                WHERE status='pending' 
+                ORDER BY created_at DESC
+            """)
+    else:
+        # Admin can see all
+        cur.execute("""
+            SELECT * FROM leave_requests 
+            WHERE status='pending' 
+            ORDER BY created_at DESC
+        """)
+    
+    rows = cur.fetchall()
+    conn_local.close()
+    
+    return jsonify({'success': True, 'leave_requests': [dict(r) for r in rows]})
+
+@app.route('/leave_request/<int:leave_id>/decision', methods=['POST'])
+@login_required_any(('teacher', 'hod', 'admin'))
+def decide_leave_request(leave_id: int):
+    """Teacher/Advisor approves or rejects leave request"""
+    data = request.get_json() or {}
+    decision = (data.get('decision') or '').strip().lower()  # 'approved' or 'rejected'
+    remarks = (data.get('remarks') or '').strip()
+    
+    if decision not in ('approved', 'rejected'):
+        return jsonify({'success': False, 'message': 'Invalid decision'}), 400
+    
+    user_id = session.get('user')
+    
+    conn_local = sqlite3.connect('school.db')
+    cur = conn_local.cursor()
+    
+    # Update leave request
+    from datetime import datetime
+    now_epoch = int(datetime.now().timestamp())
+    
+    cur.execute("""
+        UPDATE leave_requests 
+        SET status=?, advisor_user_id=?, advisor_remarks=?, updated_at=?, notification_sent='yes'
+        WHERE id=?
+    """, (decision, user_id, remarks, now_epoch, leave_id))
+    
+    conn_local.commit()
+    conn_local.close()
+    
+    return jsonify({'success': True, 'message': f'Leave request {decision}'})
+
+@app.route('/leave_request/notifications', methods=['GET'])
+@login_required('student')
+def get_leave_notifications():
+    """Get leave request notifications for student"""
+    user_id = session.get('user')
+    
+    conn_local = sqlite3.connect('school.db')
+    conn_local.row_factory = sqlite3.Row
+    cur = conn_local.cursor()
+    
+    # Get recently updated leave requests (approved/rejected)
+    cur.execute("""
+        SELECT * FROM leave_requests 
+        WHERE student_user_id=? AND status IN ('approved', 'rejected') AND notification_sent='yes'
+        ORDER BY updated_at DESC
+        LIMIT 10
+    """, (user_id,))
+    
+    rows = cur.fetchall()
+    conn_local.close()
+    
+    return jsonify({'success': True, 'notifications': [dict(r) for r in rows]})
 
 @app.route('/out_pass/teacher_create', methods=['POST'])
 @login_required_any(('teacher','hod','admin'))
@@ -2966,7 +3373,28 @@ def teacher_all_students_attendance_averages():
             pass
         dept = None
     if dept:
-        c.execute("SELECT id, name, rollno, reg_no, current_semester FROM students WHERE current_semester = ?", (dept,))
+        norm = (dept or '').strip().upper().replace(' ', '')
+        if norm == 'IT':
+            # Match by roll prefix or any current_semester containing IT
+            c.execute(
+                """
+                SELECT id, name, rollno, reg_no, current_semester
+                FROM students
+                WHERE rollno LIKE '323UIT%'
+                   OR UPPER(REPLACE(current_semester, ' ', '')) LIKE '%IT%'
+                """
+            )
+        elif norm in ('AI&ML','AIML','AIANDML'):
+            c.execute(
+                """
+                SELECT id, name, rollno, reg_no, current_semester
+                FROM students
+                WHERE rollno LIKE '323UAM%'
+                   OR UPPER(REPLACE(current_semester, ' ', '')) LIKE '%AI%ML%'
+                """
+            )
+        else:
+            c.execute("SELECT id, name, rollno, reg_no, current_semester FROM students WHERE current_semester = ?", (dept,))
     else:
         c.execute("SELECT id, name, rollno, reg_no, current_semester FROM students")
     students = c.fetchall()
@@ -3088,8 +3516,24 @@ def hod_all_students_attendance_averages():
     conn_local = sqlite3.connect('school.db')
     cur_local = conn_local.cursor()
 
-    # Return all students with all fields
-    cur_local.execute("SELECT * FROM students")
+    # Get HOD's department
+    try:
+        cur_local.execute("SELECT department FROM teachers WHERE user_id=?", (session.get('user'),))
+        row = cur_local.fetchone()
+        department = (row[0] or '').strip() if row and row[0] else None
+    except Exception:
+        department = None
+
+    # Return only students from HOD's department
+    if department:
+        if department == 'IT':
+            cur_local.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UIT%'", (department,))
+        elif department == 'AI & ML':
+            cur_local.execute("SELECT * FROM students WHERE current_semester = ? OR rollno LIKE '323UAM%'", (department,))
+        else:
+            cur_local.execute("SELECT * FROM students WHERE current_semester = ?", (department,))
+    else:
+        cur_local.execute("SELECT * FROM students")
     students = cur_local.fetchall()
     columns = [desc[0] for desc in cur_local.description]
     attendance_data = []
@@ -3171,8 +3615,14 @@ def hod_daily_absent_students():
         if 'conn_local' not in locals():
             conn_local = sqlite3.connect('school.db')
             cur_local = conn_local.cursor()
+        # HOD can only see their own department
         if department:
-            cur_local.execute("SELECT rollno, name, current_semester FROM students WHERE current_semester=?", (department,))
+            if department == 'IT':
+                cur_local.execute("SELECT rollno, name, current_semester FROM students WHERE current_semester=? OR rollno LIKE '323UIT%'", (department,))
+            elif department == 'AI & ML':
+                cur_local.execute("SELECT rollno, name, current_semester FROM students WHERE current_semester=? OR rollno LIKE '323UAM%'", (department,))
+            else:
+                cur_local.execute("SELECT rollno, name, current_semester FROM students WHERE current_semester=?", (department,))
         else:
             cur_local.execute("SELECT rollno, name, current_semester FROM students")
         students = cur_local.fetchall()

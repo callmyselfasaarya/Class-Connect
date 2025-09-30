@@ -736,36 +736,94 @@ async function loadAllTeachers() {
 // --- Courses List ---
 const coursesListContent = `
 <div class="container mx-auto">
-  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
-  <div class="glass-dark neon-border p-6">
-    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
-    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
-    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+      <i class="fas fa-book-open text-purple-400 mr-3"></i>
+      Course List
+    </h2>
+    <div id="courses-loading" class="text-sm text-purple-300">
+      <i class="fas fa-spinner fa-spin mr-2"></i>Loading courses...
+    </div>
+  </div>
+  <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  <div id="courses-empty" class="glass-dark neon-border p-12 text-center hidden">
+    <i class="fas fa-book text-6xl text-white/20 mb-4"></i>
+    <p class="text-white/60 text-lg">No courses found.</p>
   </div>
 </div>
 `;
 
 async function loadCourses(){
-  const ul = document.getElementById('courses-list');
+  const grid = document.getElementById('courses-grid');
   const loading = document.getElementById('courses-loading');
   const empty = document.getElementById('courses-empty');
-  if (!ul) return;
+  if (!grid) return;
   try{
     const res = await fetch('/courses');
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0){
       if (empty) empty.classList.remove('hidden');
-      ul.innerHTML = '';
+      grid.innerHTML = '';
       return;
     }
-    ul.innerHTML = data.map(c => `
-      <li>
-        <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
-        <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
-      </li>
-    `).join('');
+    
+    const getIcon = (courseName) => {
+      const name = (courseName || '').toLowerCase();
+      if (name.includes('python') || name.includes('programming')) return 'fa-code';
+      if (name.includes('data') || name.includes('database')) return 'fa-database';
+      if (name.includes('web') || name.includes('html')) return 'fa-globe';
+      if (name.includes('machine') || name.includes('ai')) return 'fa-robot';
+      if (name.includes('network')) return 'fa-network-wired';
+      if (name.includes('security') || name.includes('cyber')) return 'fa-shield-alt';
+      if (name.includes('cloud')) return 'fa-cloud';
+      if (name.includes('mobile') || name.includes('android')) return 'fa-mobile-alt';
+      return 'fa-book';
+    };
+    
+    const gradients = [
+      'from-purple-600 to-pink-600',
+      'from-blue-600 to-cyan-600',
+      'from-green-600 to-teal-600',
+      'from-orange-600 to-red-600',
+      'from-indigo-600 to-purple-600',
+      'from-pink-600 to-rose-600'
+    ];
+    
+    grid.innerHTML = data.map((c, index) => {
+      const gradient = gradients[index % gradients.length];
+      const icon = getIcon(c.course_name);
+      return `
+        <div class="glass-dark neon-border rounded-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+          <div class="bg-gradient-to-r ${gradient} p-4 relative overflow-hidden">
+            <div class="absolute top-0 right-0 opacity-10">
+              <i class="fas ${icon} text-8xl"></i>
+            </div>
+            <div class="relative z-10">
+              <i class="fas ${icon} text-3xl text-white mb-2"></i>
+              <h3 class="text-lg font-bold text-white line-clamp-2">${c.course_name || c.course_code}</h3>
+            </div>
+          </div>
+          <div class="p-4">
+            <div class="flex items-center mb-3">
+              <i class="fas fa-hashtag text-purple-400 mr-2"></i>
+              <span class="text-sm text-white/70 font-mono">${c.course_code || 'N/A'}</span>
+            </div>
+            <a href="${c.drive_link}" target="_blank" rel="noopener"
+               class="block w-full bg-gradient-to-r ${gradient} hover:opacity-90 text-white text-center py-2 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+              <i class="fas fa-external-link-alt mr-2"></i>
+              Open Course Materials
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
   } catch (e){
-    ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+    grid.innerHTML = `
+      <div class="col-span-full glass-dark neon-border p-6 text-center">
+        <i class="fas fa-exclamation-triangle text-red-400 text-4xl mb-3"></i>
+        <p class="text-red-400">Error loading courses.</p>
+      </div>
+    `;
   } finally {
     if (loading) loading.classList.add('hidden');
   }

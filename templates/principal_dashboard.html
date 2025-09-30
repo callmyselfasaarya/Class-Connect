@@ -57,6 +57,8 @@
         <button class="sidebar-button" data-page="attendance"><i class="fas fa-chart-line"></i><span class="label">Attendance</span></button>
         <button class="sidebar-button" data-page="daily-absent"><i class="fas fa-user-minus"></i><span class="label">Daily Absent</span></button>
         <button class="sidebar-button" data-page="students"><i class="fas fa-users"></i><span class="label">All Students</span></button>
+        <button class="sidebar-button" data-page="it-students"><i class="fas fa-laptop-code"></i><span class="label">IT Students</span></button>
+        <button class="sidebar-button" data-page="aiml-students"><i class="fas fa-brain"></i><span class="label">AI & ML Students</span></button>
         <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Course List</span></button>
         <button class="sidebar-button" data-page="scholarship"><i class="fas fa-award"></i><span class="label">Scholarship Students</span></button>
         <button class="sidebar-button" data-page="day-scholar"><i class="fas fa-bus"></i><span class="label">Day Scholar</span></button>
@@ -78,21 +80,87 @@
 
     let allStudents = [];
 
+    // Pass data from Flask
+    const todayAbsent = {{ today_absent|tojson|safe }} || [];
+    const lowAttendance = {{ low_attendance|tojson|safe }} || [];
+    const allStudentsData = {{ all_students|tojson|safe }} || [];
+    const hostellers = {{ hostellers|tojson|safe }} || [];
+    const dayScholars = {{ day_scholars|tojson|safe }} || [];
+    const outstayingStudents = {{ outstaying_students|tojson|safe }} || [];
+    const itCount = {{ it_count|tojson|safe }} || 0;
+    const aimlCount = {{ aiml_count|tojson|safe }} || 0;
+
     const dashboardContent = `
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="space-y-6">
         <div class="glass-dark neon-border p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-lg font-bold text-on-dark">Today's Absent (College)</h2>
-            <span id="absent-count" class="text-sm text-red-400 font-semibold"></span>
+          <h1 class="text-2xl font-bold text-white mb-2">Principal Dashboard - College Overview</h1>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-pink-400">${aimlCount}</div>
+              <div class="text-sm text-gray-400">AI & ML Students</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-indigo-400">${itCount}</div>
+              <div class="text-sm text-gray-400">IT Students</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-green-400">${hostellers.length}</div>
+              <div class="text-sm text-gray-400">Hostellers</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-yellow-400">${dayScholars.length}</div>
+              <div class="text-sm text-gray-400">Day Scholars</div>
+            </div>
+            <div class="bg-white/5 rounded p-3">
+              <div class="text-3xl font-bold text-purple-400">${outstayingStudents.length}</div>
+              <div class="text-sm text-gray-400">Outside Staying</div>
+            </div>
           </div>
-          <div id="absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin"><div class="muted-on-dark">Loading...</div></div>
         </div>
-        <div class="glass-dark neon-border p-6">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-lg font-bold text-on-dark">Low Attendance (&lt; 75%)</h2>
-            <span id="low-count" class="text-sm text-red-400 font-semibold"></span>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-dark neon-border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-on-dark">Today's Absent Students</h2>
+              <span id="absent-count" class="text-sm text-red-400 font-semibold">${todayAbsent.length} absent</span>
+            </div>
+            <div id="absent-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+              ${todayAbsent.length > 0 ? 
+                todayAbsent.map(s => `
+                  <div class="p-2 bg-white/5 rounded hover:bg-white/10 transition-colors">
+                    <span class="font-medium">${s.rollno}</span> - 
+                    <span class="text-gray-300">${s.name || 'Name not available'}</span>
+                  </div>
+                `).join('') : 
+                '<div class="muted-on-dark">No absent students today</div>'
+              }
+            </div>
           </div>
-          <div id="low-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin"><div class="muted-on-dark">Loading...</div></div>
+          
+          <div class="glass-dark neon-border p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-on-dark">Low Attendance Alert (&lt; 75%)</h2>
+              <span id="low-count" class="text-sm text-yellow-400 font-semibold">${lowAttendance.length} students</span>
+            </div>
+            <div id="low-list" class="space-y-2 text-on-dark max-h-80 overflow-y-auto scrollbar-thin">
+              ${lowAttendance.length > 0 ? 
+                lowAttendance.map(s => `
+                  <div class="p-3 bg-white/5 rounded hover:bg-white/10 transition-colors border-l-4 border-yellow-500">
+                    <div class="flex justify-between items-center">
+                      <div>
+                        <span class="font-medium">${s.rollno}</span> - 
+                        <span class="text-gray-300">${s.name || 'Name not available'}</span>
+                      </div>
+                      <span class="text-sm font-bold ${s.attendance < 50 ? 'text-red-500' : 'text-yellow-500'}">
+                        ${s.attendance}%
+                      </span>
+                    </div>
+                  </div>
+                `).join('') : 
+                '<div class="muted-on-dark">No students with low attendance</div>'
+              }
+            </div>
+          </div>
         </div>
       </div>`;
 
@@ -148,15 +216,80 @@
         </div>
       </div>`;
 
+    const itStudentsContent = `
+      <div class="container mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-on-dark">IT Students Details</h2>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-indigo-400 font-semibold">${itCount} IT Students</span>
+          </div>
+        </div>
+        <div class="glass-dark neon-border overflow-hidden">
+          <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+            <table class="min-w-full table-glass">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Reg No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Name</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Roll No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Class/Sem</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Scholarship</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Hostel/Day</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Bus/Room No</th>
+                </tr>
+              </thead>
+              <tbody id="it-students-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
+    const aimlStudentsContent = `
+      <div class="container mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-on-dark">AI & ML Students Details</h2>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-pink-400 font-semibold">${aimlCount} AI & ML Students</span>
+          </div>
+        </div>
+        <div class="glass-dark neon-border overflow-hidden">
+          <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+            <table class="min-w-full table-glass">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Reg No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Name</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Roll No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Class/Sem</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Scholarship</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Hostel/Day</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Bus/Room No</th>
+                </tr>
+              </thead>
+              <tbody id="aiml-students-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
     const coursesContent = `
 <div class="container mx-auto">
-  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
-  <div class="glass-dark neon-border p-6">
-    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
-    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
-    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+      <i class="fas fa-book-open text-purple-400 mr-3"></i>
+      Course List
+    </h2>
+    <div id="courses-loading" class="text-sm text-purple-300">
+      <i class="fas fa-spinner fa-spin mr-2"></i>Loading courses...
+    </div>
   </div>
-</div>`;
+  <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  <div id="courses-empty" class="glass-dark neon-border p-12 text-center hidden">
+    <i class="fas fa-book text-6xl text-white/20 mb-4"></i>
+    <p class="text-white/60 text-lg">No courses found.</p>
+  </div>
+</div>
+`;
 
     const filteredListContent = (title) => `
 <div class="container mx-auto">
@@ -238,7 +371,69 @@
       const cols = [ {key:'id',label:'ID'},{key:'reg_no',label:'Reg No'},{key:'rollno',label:'Roll No'},{key:'name',label:'Name'},{key:'current_semester',label:'Class/Sem'} ];
       const hdr = document.getElementById('hdr'); const body = document.getElementById('body'); if (!hdr||!body) return;
       hdr.innerHTML = cols.map(c=>`<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">${c.label}</th>`).join('');
-      body.innerHTML = allStudents.map(s=>`<tr class="border-b border-white/5 hover:bg-white/5">${cols.map(c=>`<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[c.key]||''}\">${s[c.key]||''}</td>`).join('')}</tr>`).join('');
+      body.innerHTML = allStudentsData.map(s=>`<tr class="border-b border-white/5 hover:bg-white/5">${cols.map(c=>`<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[c.key]||''}\">${s[c.key]||''}</td>`).join('')}</tr>`).join('');
+    }
+
+    async function loadITStudents(){
+      const tbody = document.getElementById('it-students-body');
+      if (!tbody) return;
+      
+      try {
+        const res = await fetch('/students?dept=IT');
+        const data = await res.json();
+        const itStudents = Array.isArray(data) ? data : [];
+        
+        tbody.innerHTML = itStudents.map(s => {
+          const hostelDay = s.day_scholar_or_hosteller || '';
+          const busRoomNo = hostelDay.toLowerCase().includes('day') ? (s.bus_no || '') : (s.hosteller_room_no || '');
+          const scholarship = s.scholarship || s.remarks || '';
+          
+          return `
+            <tr class="border-b border-white/5 hover:bg-white/5">
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.reg_no || ''}">${s.reg_no || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.name || ''}">${s.name || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.rollno || ''}">${s.rollno || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.current_semester || ''}">${s.current_semester || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${scholarship}">${scholarship}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${hostelDay}">${hostelDay}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${busRoomNo}">${busRoomNo}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-3 py-2 text-center text-red-400">Error loading IT students</td></tr>';
+      }
+    }
+
+    async function loadAIMLStudents(){
+      const tbody = document.getElementById('aiml-students-body');
+      if (!tbody) return;
+      
+      try {
+        const res = await fetch('/students?dept=AI & ML');
+        const data = await res.json();
+        const aimlStudents = Array.isArray(data) ? data : [];
+        
+        tbody.innerHTML = aimlStudents.map(s => {
+          const hostelDay = s.day_scholar_or_hosteller || '';
+          const busRoomNo = hostelDay.toLowerCase().includes('day') ? (s.bus_no || '') : (s.hosteller_room_no || '');
+          const scholarship = s.scholarship || s.remarks || '';
+          
+          return `
+            <tr class="border-b border-white/5 hover:bg-white/5">
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.reg_no || ''}">${s.reg_no || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.name || ''}">${s.name || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.rollno || ''}">${s.rollno || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.current_semester || ''}">${s.current_semester || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${scholarship}">${scholarship}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${hostelDay}">${hostelDay}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${busRoomNo}">${busRoomNo}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-3 py-2 text-center text-red-400">Error loading AI & ML students</td></tr>';
+      }
     }
 
     async function populateDeptSelect(elementId) {
@@ -278,6 +473,8 @@
             renderTable();
           }, 0);
           break;
+        case 'it-students': render(itStudentsContent); setTimeout(loadITStudents, 0); break;
+        case 'aiml-students': render(aimlStudentsContent); setTimeout(loadAIMLStudents, 0); break;
         case 'daily-absent': render(dashboardContent); setTimeout(()=>{ loadAbsent(); loadLow(); }, 0); break;
         case 'courses': render(coursesContent); setTimeout(loadCourses, 0); break;
         case 'scholarship':
@@ -291,7 +488,7 @@
                 {key:'rollno',label:'Roll No'},
                 {key:'category',label:'Scholarship'}
               ];
-              const list = (allStudents||[]).filter(s=>{
+              const list = (allStudentsData||[]).filter(s=>{
                 const sch = String(s.scholarship||'').toLowerCase();
                 const pmss = String(s.pmss||'').toLowerCase();
                 const remarks = String(s.remarks||'').toLowerCase();
@@ -324,7 +521,7 @@
           setTimeout(async ()=>{
             await loadStudents('');
             // Show only bus_no for day scholars
-            const list = allStudents.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('day'))
+            const list = allStudentsData.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('day'))
               .map(({reg_no, name, rollno, bus_no}) => ({reg_no, name, rollno, bus_no}));
             const cols = [
               {key:'reg_no',label:'Reg No'},
@@ -340,7 +537,7 @@
           setTimeout(async ()=>{
             await loadStudents('');
             // Show hosteller students with hosteller_room_no column
-            const list = allStudents.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('hostel'))
+            const list = allStudentsData.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('hostel'))
               .map(({reg_no, name, rollno, hosteller_room_no}) => ({reg_no, name, rollno, hosteller_room_no}));
             const cols = [
               {key:'reg_no',label:'Reg No'},
@@ -356,7 +553,7 @@
           setTimeout(async ()=>{
             await loadStudents('');
             // Show students with a non-empty outside_staying_address and not "NO"
-            const list = allStudents.filter(s =>
+            const list = allStudentsData.filter(s =>
               s.outside_staying_address &&
               s.outside_staying_address.trim().toLowerCase() !== 'no' &&
               s.outside_staying_address.trim() !== ''
@@ -375,26 +572,76 @@
     }
 
     async function loadCourses(){
-      const ul = document.getElementById('courses-list');
+      const grid = document.getElementById('courses-grid');
       const loading = document.getElementById('courses-loading');
       const empty = document.getElementById('courses-empty');
-      if (!ul) return;
+      if (!grid) return;
       try{
         const res = await fetch('/courses');
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0){
           if (empty) empty.classList.remove('hidden');
-          ul.innerHTML = '';
+          grid.innerHTML = '';
           return;
         }
-        ul.innerHTML = data.map(c => `
-          <li>
-            <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
-            <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
-          </li>
-        `).join('');
+        
+        const getIcon = (courseName) => {
+          const name = (courseName || '').toLowerCase();
+          if (name.includes('python') || name.includes('programming')) return 'fa-code';
+          if (name.includes('data') || name.includes('database')) return 'fa-database';
+          if (name.includes('web') || name.includes('html')) return 'fa-globe';
+          if (name.includes('machine') || name.includes('ai')) return 'fa-robot';
+          if (name.includes('network')) return 'fa-network-wired';
+          if (name.includes('security') || name.includes('cyber')) return 'fa-shield-alt';
+          if (name.includes('cloud')) return 'fa-cloud';
+          if (name.includes('mobile') || name.includes('android')) return 'fa-mobile-alt';
+          return 'fa-book';
+        };
+        
+        const gradients = [
+          'from-purple-600 to-pink-600',
+          'from-blue-600 to-cyan-600',
+          'from-green-600 to-teal-600',
+          'from-orange-600 to-red-600',
+          'from-indigo-600 to-purple-600',
+          'from-pink-600 to-rose-600'
+        ];
+        
+        grid.innerHTML = data.map((c, index) => {
+          const gradient = gradients[index % gradients.length];
+          const icon = getIcon(c.course_name);
+          return `
+            <div class="glass-dark neon-border rounded-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div class="bg-gradient-to-r ${gradient} p-4 relative overflow-hidden">
+                <div class="absolute top-0 right-0 opacity-10">
+                  <i class="fas ${icon} text-8xl"></i>
+                </div>
+                <div class="relative z-10">
+                  <i class="fas ${icon} text-3xl text-white mb-2"></i>
+                  <h3 class="text-lg font-bold text-white line-clamp-2">${c.course_name || c.course_code}</h3>
+                </div>
+              </div>
+              <div class="p-4">
+                <div class="flex items-center mb-3">
+                  <i class="fas fa-hashtag text-purple-400 mr-2"></i>
+                  <span class="text-sm text-white/70 font-mono">${c.course_code || 'N/A'}</span>
+                </div>
+                <a href="${c.drive_link}" target="_blank" rel="noopener"
+                   class="block w-full bg-gradient-to-r ${gradient} hover:opacity-90 text-white text-center py-2 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+                  <i class="fas fa-external-link-alt mr-2"></i>
+                  Open Course Materials
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
       } catch (e){
-        ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+        grid.innerHTML = `
+          <div class="col-span-full glass-dark neon-border p-6 text-center">
+            <i class="fas fa-exclamation-triangle text-red-400 text-4xl mb-3"></i>
+            <p class="text-red-400">Error loading courses.</p>
+          </div>
+        `;
       } finally {
         if (loading) loading.classList.add('hidden');
       }

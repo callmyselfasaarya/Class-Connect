@@ -192,7 +192,12 @@
       <button class="sidebar-button" data-page="attendance"><i class="fas fa-chart-line"></i><span class="label">Attendance Overview</span></button>
       <button class="sidebar-button" data-page="view"><i class="fas fa-users"></i><span class="label">View Students</span></button>
       <button class="sidebar-button" data-page="courses"><i class="fas fa-book"></i><span class="label">Course List</span></button>
-      <button class="sidebar-button" data-page="passes"><i class="fas fa-ticket"></i><span class="label">Out Pass Approvals</span></button>
+      <button class="sidebar-button" data-page="scholarship"><i class="fas fa-award"></i><span class="label">Scholarship Students</span></button>
+      <button class="sidebar-button" data-page="day-scholar"><i class="fas fa-bus"></i><span class="label">Day Scholar</span></button>
+      <button class="sidebar-button" data-page="hostel"><i class="fas fa-hotel"></i><span class="label">Hostel</span></button>
+      <button class="sidebar-button" data-page="outside"><i class="fas fa-house-damage"></i><span class="label">Outside Staying</span></button>
+      <button class="sidebar-button" data-page="passes"><i class="fas fa-ticket"></i><span class="label">Out Pass Approvals</span><span id="expired-pass-badge" class="hidden ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">0</span></button>
+      <button class="sidebar-button" data-page="leave-approvals"><i class="fas fa-calendar-check"></i><span class="label">Leave Approvals</span><span id="leave-pending-badge" class="hidden ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">0</span></button>
       <button class="sidebar-button" data-page="change-password"><i class="fas fa-key"></i><span class="label">Change Password</span></button>
       <button class="sidebar-button mt-8 w-full flex items-center justify-start text-red-500" id="logout-btn">
         <i class="fas fa-sign-out-alt mr-2"></i>
@@ -241,18 +246,72 @@ document.addEventListener('DOMContentLoaded', () => {
     const todayAbsent = {{ today_absent|tojson|safe }} || [];
     const lowAttendance = {{ low_attendance|tojson|safe }} || [];
     const departmentStudents = {{ department_students|tojson|safe }} || [];
+    const hostellers = {{ hostellers|tojson|safe }} || [];
+    const dayScholars = {{ day_scholars|tojson|safe }} || [];
+    const outstayingStudents = {{ outstaying_students|tojson|safe }} || [];
+    const itCount = {{ it_count|tojson|safe }} || 0;
+    const aimlCount = {{ aiml_count|tojson|safe }} || 0;
     // Initialize the working dataset with department-specific students so View table renders rows
     allStudents = Array.isArray(departmentStudents) ? departmentStudents : [];
     
+    // Build stats cards dynamically per department
+    const statsCards = [];
+    if (teacherDepartment === 'AI & ML') {
+      statsCards.push(`
+          <div class="bg-white/5 rounded p-3">
+            <div class="text-3xl font-bold text-pink-400">${aimlCount}</div>
+            <div class="text-sm text-gray-400">AI & ML Students</div>
+          </div>`);
+    }
+    if (teacherDepartment === 'IT') {
+      statsCards.push(`
+          <div class="bg-white/5 rounded p-3">
+            <div class="text-3xl font-bold text-indigo-400">${itCount}</div>
+            <div class="text-sm text-gray-400">IT Students</div>
+          </div>`);
+    }
+    statsCards.push(`
+          <div class="bg-white/5 rounded p-3">
+            <div class="text-3xl font-bold text-green-400">${hostellers.length}</div>
+            <div class="text-sm text-gray-400">Hostellers</div>
+          </div>`);
+    statsCards.push(`
+          <div class="bg-white/5 rounded p-3">
+            <div class="text-3xl font-bold text-yellow-400">${dayScholars.length}</div>
+            <div class="text-sm text-gray-400">Day Scholars</div>
+          </div>`);
+    statsCards.push(`
+          <div class="bg-white/5 rounded p-3">
+            <div class="text-3xl font-bold text-purple-400">${outstayingStudents.length}</div>
+            <div class="text-sm text-gray-400">Outside Staying</div>
+          </div>`);
+
     // Content Templates
     const welcomeContent = `
     <div class="space-y-6">
       <div class="glass-dark neon-border p-6 mb-4">
         <h1 class="text-2xl font-bold text-white mb-2">${teacherDepartment} Department - Teacher Dashboard</h1>
-        <p class="text-gray-300">Total Students: ${departmentStudents.length}</p>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+          ${statsCards.join('')}
+        </div>
       </div>
       
-      <div class="glass-dark neon-border p-6">
+      <!-- Expired Pass Alert for Teachers -->
+      <div id="teacher-expired-alert" class="hidden glass-dark neon-border p-4 border-l-4 border-red-500">
+        <div class="flex items-start">
+          <i class="fas fa-exclamation-triangle text-red-500 text-2xl mr-3 mt-1"></i>
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-red-400 mb-2">⚠️ STUDENTS WITH EXPIRED OUT PASSES</h3>
+            <div id="teacher-expired-details" class="text-white/90 text-sm space-y-1"></div>
+            <button onclick="navigate('passes')" class="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">
+              <i class="fas fa-eye mr-2"></i>View All Expired Passes
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass-dark neon-border p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-bold text-on-dark">Today's Absent Students</h2>
           <span id="teacher-absent-count" class="text-sm text-red-400 font-semibold">${todayAbsent.length} absent</span>
@@ -374,11 +433,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const coursesContent = `
 <div class="container mx-auto">
-  <h2 class="text-2xl font-semibold text-on-dark mb-4">Course List</h2>
-  <div class="glass-dark neon-border p-6">
-    <div id="courses-loading" class="text-sm muted-on-dark mb-2">Loading courses...</div>
-    <ul id="courses-list" class="list-disc pl-6 text-lg text-on-dark space-y-2"></ul>
-    <div id="courses-empty" class="muted-on-dark hidden">No courses found.</div>
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+      <i class="fas fa-book-open text-purple-400 mr-3"></i>
+      Course List
+    </h2>
+    <div id="courses-loading" class="text-sm text-purple-300">
+      <i class="fas fa-spinner fa-spin mr-2"></i>Loading courses...
+    </div>
+  </div>
+  <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  <div id="courses-empty" class="glass-dark neon-border p-12 text-center hidden">
+    <i class="fas fa-book text-6xl text-white/20 mb-4"></i>
+    <p class="text-white/60 text-lg">No courses found.</p>
   </div>
 </div>
 `;
@@ -411,12 +478,223 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>`;
 
+    const leaveApprovalsContent = `
+    <div class="container mx-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-semibold text-on-dark flex items-center">
+          <i class="fas fa-calendar-check text-orange-400 mr-3"></i>
+          Leave Request Approvals
+        </h2>
+        <button id="refresh-leave-approvals" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-all">
+          <i class="fas fa-sync-alt mr-2"></i>Refresh
+        </button>
+      </div>
+      
+      <div class="glass-dark neon-border overflow-hidden">
+        <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+          <table class="min-w-full table-glass">
+            <thead class="sticky top-0 z-10">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Roll No</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Leave Type</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">From Date</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">To Date</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Reason</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="leave-approvals-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+    const itStudentsContent = `
+      <div class="container mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-on-dark">IT Students Details</h2>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-indigo-400 font-semibold">${itCount} IT Students</span>
+          </div>
+        </div>
+        <div class="glass-dark neon-border overflow-hidden">
+          <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+            <table class="min-w-full table-glass">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Reg No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Name</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Roll No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Class/Sem</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Scholarship</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Hostel/Day</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Bus/Room No</th>
+                </tr>
+              </thead>
+              <tbody id="it-students-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
+    const aimlStudentsContent = `
+      <div class="container mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold text-on-dark">AI & ML Students Details</h2>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-pink-400 font-semibold">${aimlCount} AI & ML Students</span>
+          </div>
+        </div>
+        <div class="glass-dark neon-border overflow-hidden">
+          <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+            <table class="min-w-full table-glass">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Reg No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Name</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Roll No</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Class/Sem</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Scholarship</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Hostel/Day</th>
+                  <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">Bus/Room No</th>
+                </tr>
+              </thead>
+              <tbody id="aiml-students-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
+    const scholarshipContent = `
+<div class="container mx-auto">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-2xl font-semibold text-on-dark">Scholarship Students</h2>
+  </div>
+  <div class="flex flex-wrap gap-2 mb-4">
+    <button class="px-3 py-1 text-xs rounded bg-pink-600 text-white" data-sch="pmss">PMSS</button>
+    <button class="px-3 py-1 text-xs rounded bg-white/10 text-on-dark" data-sch="mbc_bc">MBC/BC</button>
+    <button class="px-3 py-1 text-xs rounded bg-white/10 text-on-dark" data-sch="tps">TPS</button>
+    <button class="px-3 py-1 text-xs rounded bg-white/10 text-on-dark" data-sch="seven_five">7.5</button>
+    <button class="px-3 py-1 text-xs rounded bg-white/10 text-on-dark" data-sch="pps">PPS</button>
+  </div>
+  <div class="glass-dark neon-border overflow-hidden">
+    <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+      <table class="min-w-full table-glass">
+        <thead class="sticky top-0 z-10"><tr id="flt-hdr"></tr></thead>
+        <tbody id="flt-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>`;
+
+    const filteredListContent = (title) => `
+<div class="container mx-auto">
+  <h2 class="text-2xl font-semibold text-on-dark mb-4">${title}</h2>
+  <div class="glass-dark neon-border overflow-hidden">
+    <div class="overflow-x-auto max-h-[70vh] scrollbar-thin">
+      <table class="min-w-full table-glass">
+        <thead class="sticky top-0 z-10"><tr id="flt-hdr"></tr></thead>
+        <tbody id="flt-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>`;
+
+
+    async function loadITStudents(){
+      const tbody = document.getElementById('it-students-body');
+      if (!tbody) return;
+      
+      try {
+        const res = await fetch('/students?dept=IT');
+        const data = await res.json();
+        const itStudents = Array.isArray(data) ? data : [];
+        
+        tbody.innerHTML = itStudents.map(s => {
+          const hostelDay = s.day_scholar_or_hosteller || '';
+          const busRoomNo = hostelDay.toLowerCase().includes('day') ? (s.bus_no || '') : (s.hosteller_room_no || '');
+          const scholarship = s.scholarship || s.remarks || '';
+          
+          return `
+            <tr class="border-b border-white/5 hover:bg-white/5">
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.reg_no || ''}">${s.reg_no || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.name || ''}">${s.name || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.rollno || ''}">${s.rollno || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.current_semester || ''}">${s.current_semester || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${scholarship}">${scholarship}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${hostelDay}">${hostelDay}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${busRoomNo}">${busRoomNo}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-3 py-2 text-center text-red-400">Error loading IT students</td></tr>';
+      }
+    }
+
+    async function loadAIMLStudents(){
+      const tbody = document.getElementById('aiml-students-body');
+      if (!tbody) return;
+      
+      try {
+        const res = await fetch('/students?dept=AI & ML');
+        const data = await res.json();
+        const aimlStudents = Array.isArray(data) ? data : [];
+        
+        tbody.innerHTML = aimlStudents.map(s => {
+          const hostelDay = s.day_scholar_or_hosteller || '';
+          const busRoomNo = hostelDay.toLowerCase().includes('day') ? (s.bus_no || '') : (s.hosteller_room_no || '');
+          const scholarship = s.scholarship || s.remarks || '';
+          
+          return `
+            <tr class="border-b border-white/5 hover:bg-white/5">
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.reg_no || ''}">${s.reg_no || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.name || ''}">${s.name || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.rollno || ''}">${s.rollno || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${s.current_semester || ''}">${s.current_semester || ''}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${scholarship}">${scholarship}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${hostelDay}">${hostelDay}</td>
+              <td class="px-3 py-2 text-[12px] truncate align-top" title="${busRoomNo}">${busRoomNo}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-3 py-2 text-center text-red-400">Error loading AI & ML students</td></tr>';
+      }
+    }
+
+    function renderFiltered(list, cols){
+      const hdr = document.getElementById('flt-hdr'); const body = document.getElementById('flt-body'); if (!hdr||!body) return;
+      hdr.innerHTML = cols.map(c=>`<th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-on-dark/80 text-left whitespace-nowrap">${c.label}</th>`).join('');
+      body.innerHTML = list.map(s=>`<tr class="border-b border-white/5 hover:bg-white/5">${cols.map(c=>`<td class="px-3 py-2 text-[12px] truncate align-top" title="${s[c.key]||''}\">${s[c.key]||''}</td>`).join('')}</tr>`).join('');
+    }
 
     function renderContent(content) {
       document.getElementById('main-content').innerHTML = content;
     }
 
+    // Track which badges have been viewed
+    let teacherPassBadgeViewed = false;
+    let teacherLeaveBadgeViewed = false;
+
     function handleNavigation(page) {
+      // Clear notification badges when viewing the respective pages
+      if (page === 'passes') {
+        const expiredBadge = document.getElementById('expired-pass-badge');
+        if (expiredBadge) {
+          expiredBadge.classList.add('hidden');
+          teacherPassBadgeViewed = true;
+        }
+      }
+      if (page === 'leave-approvals') {
+        const leaveBadge = document.getElementById('leave-pending-badge');
+        if (leaveBadge) {
+          leaveBadge.classList.add('hidden');
+          teacherLeaveBadgeViewed = true;
+        }
+      }
+      
       switch (page) {
         case "search": renderContent(searchContent); initSearch(); break;
         case "attendance": renderContent(attendanceContent); setTimeout(loadTeachersAttendance, 0); break;
@@ -424,14 +702,100 @@ document.addEventListener('DOMContentLoaded', () => {
           renderContent(teacherFullStudentTableContent);
           setTimeout(() => { renderTeacherFullStudentTable(allStudents); }, 0);
           break;
+        case "it-students": renderContent(itStudentsContent); setTimeout(loadITStudents, 0); break;
+        case "aiml-students": renderContent(aimlStudentsContent); setTimeout(loadAIMLStudents, 0); break;
+        case "scholarship":
+          renderContent(scholarshipContent);
+          setTimeout(async ()=>{
+            const renderCategory = (cat)=>{
+              const cols = [
+                {key:'reg_no',label:'Reg No'},
+                {key:'name',label:'Name'},
+                {key:'rollno',label:'Roll No'},
+                {key:'category',label:'Scholarship'}
+              ];
+              const list = (allStudents||[]).filter(s=>{
+                const sch = String(s.scholarship||'').toLowerCase();
+                const pmss = String(s.pmss||'').toLowerCase();
+                const remarks = String(s.remarks||'').toLowerCase();
+                if (cat==='pmss') return pmss === 'yes' || sch.includes('pmss') || remarks.includes('pmss');
+                if (cat==='mbc_bc') return sch.includes('mbc') || sch.includes('bc') || remarks.includes('mbc') || remarks.includes('bc');
+                if (cat==='tps') return sch.includes('tps') || remarks.includes('tps');
+                if (cat==='seven_five') return sch.includes('7.5') || sch.includes('7,5') || remarks.includes('7.5');
+                if (cat==='pps') return sch.includes('pps') || remarks.includes('pps');
+                return false;
+              }).map(({reg_no, name, rollno, scholarship, pmss})=>({
+                reg_no, name, rollno,
+                category: (cat==='pmss' ? 'PMSS' : (scholarship||'').toString()),
+              }));
+              renderFiltered(list, cols);
+            };
+            document.querySelectorAll('[data-sch]').forEach(b=>{
+              b.addEventListener('click', (e)=>{
+                document.querySelectorAll('[data-sch]').forEach(x=>{ x.classList.remove('bg-pink-600','text-white'); x.classList.add('bg-white/10','text-on-dark'); });
+                e.currentTarget.classList.add('bg-pink-600','text-white');
+                e.currentTarget.classList.remove('bg-white/10','text-on-dark');
+                renderCategory(e.currentTarget.getAttribute('data-sch'));
+              });
+            });
+            renderCategory('pmss');
+          }, 0);
+          break;
+        case "day-scholar":
+          renderContent(filteredListContent('Day Scholar Students'));
+          setTimeout(async ()=>{
+            const list = allStudents.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('day'))
+              .map(({reg_no, name, rollno, bus_no}) => ({reg_no, name, rollno, bus_no}));
+            const cols = [
+              {key:'reg_no',label:'Reg No'},
+              {key:'name',label:'Name'},
+              {key:'rollno',label:'Roll No'},
+              {key:'bus_no',label:'Bus No'}
+            ];
+            renderFiltered(list, cols);
+          }, 0);
+          break;
+        case "hostel":
+          renderContent(filteredListContent('Hostel Students'));
+          setTimeout(async ()=>{
+            const list = allStudents.filter(s => (s.day_scholar_or_hosteller||'').toLowerCase().includes('hostel'))
+              .map(({reg_no, name, rollno, hosteller_room_no}) => ({reg_no, name, rollno, hosteller_room_no}));
+            const cols = [
+              {key:'reg_no',label:'Reg No'},
+              {key:'name',label:'Name'},
+              {key:'rollno',label:'Roll No'},
+              {key:'hosteller_room_no',label:'Room No'}
+            ];
+            renderFiltered(list, cols);
+          }, 0);
+          break;
+        case "outside":
+          renderContent(filteredListContent('Outside Staying Students'));
+          setTimeout(async ()=>{
+            const list = allStudents.filter(s =>
+              s.outside_staying_address &&
+              s.outside_staying_address.trim().toLowerCase() !== 'no' &&
+              s.outside_staying_address.trim() !== ''
+            ).map(({reg_no, name, rollno, outside_staying_address}) => ({reg_no, name, rollno, outside_staying_address}));
+            const cols = [
+              {key:'reg_no',label:'Reg No'},
+              {key:'name',label:'Name'},
+              {key:'rollno',label:'Roll No'},
+              {key:'outside_staying_address',label:'Outside Staying Address'}
+            ];
+            renderFiltered(list, cols);
+          }, 0);
+          break;
         case "change-password": renderContent(changePasswordContent); document.getElementById('change-password-btn').onclick = changePassword; break;
         case "courses": renderContent(coursesContent); setTimeout(loadCourses, 0); break;
         case "passes": renderContent(passesContent); setTimeout(initTeacherPasses, 0); break;
+        case "leave-approvals": renderContent(leaveApprovalsContent); setTimeout(loadLeaveApprovals, 0); break;
         case "dashboard":
         default:
           renderContent(welcomeContent);
           setTimeout(loadTeacherDailyAbsentStudents, 0);
           setTimeout(loadLowAttendanceAnnouncements, 200);
+          setTimeout(checkExpiredPassesForTeacher, 300);
           break;
       }
     }
@@ -588,26 +952,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadCourses(){
-      const ul = document.getElementById('courses-list');
+      const grid = document.getElementById('courses-grid');
       const loading = document.getElementById('courses-loading');
       const empty = document.getElementById('courses-empty');
-      if (!ul) return;
+      if (!grid) return;
       try{
         const res = await fetch('/courses');
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0){
           if (empty) empty.classList.remove('hidden');
-          ul.innerHTML = '';
+          grid.innerHTML = '';
           return;
         }
-        ul.innerHTML = data.map(c => `
-          <li>
-            <a href="${c.drive_link}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 underline">${c.course_name || c.course_code}</a>
-            <span class="text-sm muted-on-dark ml-2">${c.course_code || ''}</span>
-          </li>
-        `).join('');
+        
+        // Course card icons based on course name
+        const getIcon = (courseName) => {
+          const name = (courseName || '').toLowerCase();
+          if (name.includes('python') || name.includes('programming')) return 'fa-code';
+          if (name.includes('data') || name.includes('database')) return 'fa-database';
+          if (name.includes('web') || name.includes('html')) return 'fa-globe';
+          if (name.includes('machine') || name.includes('ai')) return 'fa-robot';
+          if (name.includes('network')) return 'fa-network-wired';
+          if (name.includes('security') || name.includes('cyber')) return 'fa-shield-alt';
+          if (name.includes('cloud')) return 'fa-cloud';
+          if (name.includes('mobile') || name.includes('android')) return 'fa-mobile-alt';
+          return 'fa-book';
+        };
+        
+        // Generate gradient colors
+        const gradients = [
+          'from-purple-600 to-pink-600',
+          'from-blue-600 to-cyan-600',
+          'from-green-600 to-teal-600',
+          'from-orange-600 to-red-600',
+          'from-indigo-600 to-purple-600',
+          'from-pink-600 to-rose-600'
+        ];
+        
+        grid.innerHTML = data.map((c, index) => {
+          const gradient = gradients[index % gradients.length];
+          const icon = getIcon(c.course_name);
+          return `
+            <div class="glass-dark neon-border rounded-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <!-- Course Header with Gradient -->
+              <div class="bg-gradient-to-r ${gradient} p-4 relative overflow-hidden">
+                <div class="absolute top-0 right-0 opacity-10">
+                  <i class="fas ${icon} text-8xl"></i>
+                </div>
+                <div class="relative z-10">
+                  <i class="fas ${icon} text-3xl text-white mb-2"></i>
+                  <h3 class="text-lg font-bold text-white line-clamp-2">${c.course_name || c.course_code}</h3>
+                </div>
+              </div>
+              
+              <!-- Course Body -->
+              <div class="p-4">
+                <div class="flex items-center mb-3">
+                  <i class="fas fa-hashtag text-purple-400 mr-2"></i>
+                  <span class="text-sm text-white/70 font-mono">${c.course_code || 'N/A'}</span>
+                </div>
+                
+                <!-- Action Button -->
+                <a href="${c.drive_link}" target="_blank" rel="noopener"
+                   class="block w-full bg-gradient-to-r ${gradient} hover:opacity-90 text-white text-center py-2 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+                  <i class="fas fa-external-link-alt mr-2"></i>
+                  Open Course Materials
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
       } catch (e){
-        ul.innerHTML = '<li class="text-red-400">Error loading courses.</li>';
+        grid.innerHTML = `
+          <div class="col-span-full glass-dark neon-border p-6 text-center">
+            <i class="fas fa-exclamation-triangle text-red-400 text-4xl mb-3"></i>
+            <p class="text-red-400">Error loading courses.</p>
+          </div>
+        `;
       } finally {
         if (loading) loading.classList.add('hidden');
       }
@@ -684,11 +1105,82 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label class="text-xs text-white/70">Reason</label>
                 <input id="tch-op-reason" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" placeholder="Reason" />
               </div>
-              <div id="tch-op-fromto">
-                <label class="text-xs text-white/70">From / To</label>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <input id="tch-op-from" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
-                  <input id="tch-op-to" type="datetime-local" class="w-full p-2 rounded mt-1 bg-white/10 border border-white/20 text-white" />
+              <div id="tch-op-fromto" class="bg-gradient-to-br from-purple-900/30 to-blue-900/30 p-4 rounded-lg border border-purple-500/30">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-semibold text-white flex items-center">
+                    <i class="fas fa-clock text-purple-400 mr-2"></i>
+                    Pass Duration
+                  </h4>
+                  <span id="duration-display" class="text-xs text-purple-300"></span>
+                </div>
+                
+                <!-- From DateTime -->
+                <div class="mb-3">
+                  <label class="text-xs font-medium text-purple-200 mb-2 flex items-center">
+                    <i class="fas fa-play-circle text-green-400 mr-2"></i>
+                    Start Time
+                  </label>
+                  <div class="relative">
+                    <input id="tch-op-from" type="datetime-local" 
+                      class="w-full p-3 pl-10 rounded-lg bg-white/5 border-2 border-purple-500/50 text-white text-sm
+                             focus:border-purple-400 focus:ring-2 focus:ring-purple-500/50 focus:bg-white/10
+                             transition-all duration-200 hover:border-purple-400/70" />
+                    <i class="fas fa-calendar-day absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-400"></i>
+                  </div>
+                </div>
+                
+                <!-- To DateTime -->
+                <div class="mb-3">
+                  <label class="text-xs font-medium text-purple-200 mb-2 flex items-center">
+                    <i class="fas fa-stop-circle text-red-400 mr-2"></i>
+                    End Time
+                  </label>
+                  <div class="relative">
+                    <input id="tch-op-to" type="datetime-local" 
+                      class="w-full p-3 pl-10 rounded-lg bg-white/5 border-2 border-purple-500/50 text-white text-sm
+                             focus:border-purple-400 focus:ring-2 focus:ring-purple-500/50 focus:bg-white/10
+                             transition-all duration-200 hover:border-purple-400/70" />
+                    <i class="fas fa-calendar-check absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-400"></i>
+                  </div>
+                </div>
+                
+                <!-- Quick Duration Presets -->
+                <div class="border-t border-purple-500/30 pt-3">
+                  <label class="text-xs font-medium text-purple-200 mb-2 block">Quick Duration Presets:</label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="setQuickTime('2h')" 
+                      class="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 
+                             text-white rounded-lg text-xs font-medium transition-all duration-200 
+                             transform hover:scale-105 active:scale-95 shadow-lg">
+                      <i class="fas fa-clock mr-1"></i>2 Hours
+                    </button>
+                    <button type="button" onclick="setQuickTime('4h')" 
+                      class="px-3 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 
+                             text-white rounded-lg text-xs font-medium transition-all duration-200 
+                             transform hover:scale-105 active:scale-95 shadow-lg">
+                      <i class="fas fa-hourglass-half mr-1"></i>4 Hours
+                    </button>
+                    <button type="button" onclick="setQuickTime('1d')" 
+                      class="px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 
+                             text-white rounded-lg text-xs font-medium transition-all duration-200 
+                             transform hover:scale-105 active:scale-95 shadow-lg">
+                      <i class="fas fa-calendar-day mr-1"></i>1 Day
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 mt-2">
+                    <button type="button" onclick="setQuickTime('now')" 
+                      class="px-3 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 
+                             text-white rounded-lg text-xs font-medium transition-all duration-200 
+                             transform hover:scale-105 active:scale-95 shadow-lg">
+                      <i class="fas fa-bolt mr-1"></i>Start Now
+                    </button>
+                    <button type="button" onclick="setQuickTime('clear')" 
+                      class="px-3 py-2 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 
+                             text-white rounded-lg text-xs font-medium transition-all duration-200 
+                             transform hover:scale-105 active:scale-95 shadow-lg">
+                      <i class="fas fa-eraser mr-1"></i>Clear
+                    </button>
+                  </div>
                 </div>
               </div>
               <div id="tch-od-extra" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -731,6 +1223,115 @@ document.addEventListener('DOMContentLoaded', () => {
         if (t === 'other') { otherExtra.classList.remove('hidden'); }
       };
       typeSel.onchange = updateExtras; updateExtras();
+      
+      // Set default times (now and +10 minutes)
+      const now = new Date();
+      const later = new Date(now.getTime() + 10 * 60 * 1000); // +10 minutes
+      document.getElementById('tch-op-from').value = formatDateTimeLocal(now);
+      document.getElementById('tch-op-to').value = formatDateTimeLocal(later);
+      
+      // Add event listeners to update duration display
+      const fromInput = document.getElementById('tch-op-from');
+      const toInput = document.getElementById('tch-op-to');
+      const updateDuration = () => {
+        if (fromInput.value && toInput.value) {
+          const from = new Date(fromInput.value);
+          const to = new Date(toInput.value);
+          const diff = to - from;
+          
+          if (diff > 0) {
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const days = Math.floor(hours / 24);
+            const remainingHours = hours % 24;
+            
+            let durationText = '';
+            if (days > 0) {
+              durationText = `${days}d ${remainingHours}h ${minutes}m`;
+            } else if (hours > 0) {
+              durationText = `${hours}h ${minutes}m`;
+            } else {
+              durationText = `${minutes}m`;
+            }
+            
+            document.getElementById('duration-display').textContent = `Duration: ${durationText}`;
+            document.getElementById('duration-display').className = 'text-xs text-green-300 font-semibold';
+          } else {
+            document.getElementById('duration-display').textContent = 'Invalid duration';
+            document.getElementById('duration-display').className = 'text-xs text-red-300 font-semibold';
+          }
+        }
+      };
+      
+      fromInput.addEventListener('change', updateDuration);
+      toInput.addEventListener('change', updateDuration);
+      updateDuration(); // Initial calculation
+    }
+    
+    // Helper function to format date for datetime-local input
+    function formatDateTimeLocal(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    // Quick time setting buttons
+    window.setQuickTime = function(option) {
+      const fromInput = document.getElementById('tch-op-from');
+      const toInput = document.getElementById('tch-op-to');
+      const now = new Date();
+      
+      switch(option) {
+        case 'now':
+          fromInput.value = formatDateTimeLocal(now);
+          const tenMinutesLater = new Date(now.getTime() + 10 * 60 * 1000);
+          toInput.value = formatDateTimeLocal(tenMinutesLater);
+          break;
+        case '2h':
+          if (fromInput.value) {
+            const fromDate = new Date(fromInput.value);
+            const toDate = new Date(fromDate.getTime() + 2 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(toDate);
+          } else {
+            fromInput.value = formatDateTimeLocal(now);
+            const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(twoHoursLater);
+          }
+          break;
+        case '4h':
+          if (fromInput.value) {
+            const fromDate = new Date(fromInput.value);
+            const toDate = new Date(fromDate.getTime() + 4 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(toDate);
+          } else {
+            fromInput.value = formatDateTimeLocal(now);
+            const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(fourHoursLater);
+          }
+          break;
+        case '1d':
+          if (fromInput.value) {
+            const fromDate = new Date(fromInput.value);
+            const toDate = new Date(fromDate.getTime() + 24 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(toDate);
+          } else {
+            fromInput.value = formatDateTimeLocal(now);
+            const oneDayLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            toInput.value = formatDateTimeLocal(oneDayLater);
+          }
+          break;
+        case 'clear':
+          fromInput.value = '';
+          toInput.value = '';
+          break;
+      }
+      
+      // Trigger change event to update duration display
+      fromInput.dispatchEvent(new Event('change'));
+      toInput.dispatchEvent(new Event('change'));
     }
 
     window.submitTeacherOP = async function(rollno){
@@ -764,7 +1365,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await res.json();
           const rows = (data && data.success && Array.isArray(data.passes)) ? data.passes : [];
           if (tbody) tbody.innerHTML = rows.map(p => `
-            <tr class="border-b border-white/10">
+            <tr class="border-b border-white/10" id="pass-row-${p.id}">
               <td class="px-3 py-2 text-sm text-on-dark">${p.requester_name||''}</td>
               <td class="px-3 py-2 text-sm muted-on-dark">${p.rollno||''}</td>
               <td class="px-3 py-2 text-sm muted-on-dark">${p.department||''}</td>
@@ -773,8 +1374,51 @@ document.addEventListener('DOMContentLoaded', () => {
               <td class="px-3 py-2 text-sm muted-on-dark">${p.to_datetime||''}</td>
               <td class="px-3 py-2 text-xs muted-on-dark">${(p.pass_type==='od_pass')? (p.od_duration||'') + (p.od_duration==='n_days'?` (${p.od_days||''}d)`: '') : (p.pass_type==='other'? (p.other_hours||'') : '')}</td>
               <td class="px-3 py-2 text-sm">
-                <button class="px-2 py-1 bg-green-600 text-white rounded mr-2 text-xs" onclick="teacherApprovePass(${p.id})">Approve</button>
-                <button class="px-2 py-1 bg-red-600 text-white rounded text-xs" onclick="teacherRejectPass(${p.id})">Reject</button>
+                <button class="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded mr-2 text-xs transition-colors" onclick="showApprovalForm(${p.id}, '${p.from_datetime||''}', '${p.to_datetime||''}')">Approve</button>
+                <button class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors" onclick="teacherRejectPass(${p.id})">Reject</button>
+              </td>
+            </tr>
+            <tr id="approval-form-${p.id}" class="hidden border-b border-white/10 bg-gradient-to-r from-green-900/20 to-blue-900/20">
+              <td colspan="8" class="p-4">
+                <div class="bg-white/5 rounded-lg p-4 border border-green-500/30">
+                  <h4 class="text-sm font-semibold text-white mb-3 flex items-center">
+                    <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                    Approve Out Pass - Adjust Times (Optional)
+                  </h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label class="text-xs text-green-200 mb-1 flex items-center">
+                        <i class="fas fa-calendar-day mr-1"></i> From Date & Time
+                      </label>
+                      <input type="datetime-local" id="approve-from-${p.id}" value="${p.from_datetime||''}" 
+                        class="w-full p-2 rounded bg-white/10 border border-green-500/50 text-white text-sm focus:border-green-400 focus:ring-1 focus:ring-green-500" />
+                    </div>
+                    <div>
+                      <label class="text-xs text-green-200 mb-1 flex items-center">
+                        <i class="fas fa-calendar-check mr-1"></i> To Date & Time
+                      </label>
+                      <input type="datetime-local" id="approve-to-${p.id}" value="${p.to_datetime||''}" 
+                        class="w-full p-2 rounded bg-white/10 border border-green-500/50 text-white text-sm focus:border-green-400 focus:ring-1 focus:ring-green-500" />
+                    </div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="text-xs text-green-200 mb-1 flex items-center">
+                      <i class="fas fa-comment mr-1"></i> Remarks (Optional)
+                    </label>
+                    <input type="text" id="approve-remarks-${p.id}" placeholder="Add any remarks..." 
+                      class="w-full p-2 rounded bg-white/10 border border-green-500/50 text-white text-sm focus:border-green-400 focus:ring-1 focus:ring-green-500" />
+                  </div>
+                  <div class="flex gap-2">
+                    <button onclick="confirmApproval(${p.id})" 
+                      class="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white rounded font-medium text-sm transition-all">
+                      <i class="fas fa-check mr-1"></i> Confirm Approval
+                    </button>
+                    <button onclick="hideApprovalForm(${p.id})" 
+                      class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-medium text-sm transition-all">
+                      <i class="fas fa-times mr-1"></i> Cancel
+                    </button>
+                  </div>
+                </div>
               </td>
             </tr>`).join('');
         } catch (e) {
@@ -787,22 +1431,232 @@ document.addEventListener('DOMContentLoaded', () => {
       refresh();
     }
 
-    window.teacherApprovePass = async function(id){
-      try{
-        // Allow teacher to tweak time/day upon approval
-        const fromNew = prompt('Optionally adjust FROM datetime (YYYY-MM-DD HH:MM), or leave empty');
-        const toNew = prompt('Optionally adjust TO datetime (YYYY-MM-DD HH:MM), or leave empty');
-        const remarks = prompt('Remarks (optional)') || '';
-        await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'approved', remarks }) });
-      }catch(e){}
-      if (window._teacherRefreshPasses) window._teacherRefreshPasses();
+    // Show inline approval form
+    window.showApprovalForm = function(id, fromDateTime, toDateTime) {
+      // Hide any other open forms
+      document.querySelectorAll('[id^="approval-form-"]').forEach(form => {
+        form.classList.add('hidden');
+      });
+      
+      // Show this form
+      const form = document.getElementById(`approval-form-${id}`);
+      if (form) {
+        form.classList.remove('hidden');
+        
+        // Scroll to the form smoothly
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
+    
+    // Hide approval form
+    window.hideApprovalForm = function(id) {
+      const form = document.getElementById(`approval-form-${id}`);
+      if (form) {
+        form.classList.add('hidden');
+      }
+    }
+    
+    // Confirm approval with adjusted times
+    window.confirmApproval = async function(id) {
+      try {
+        const fromInput = document.getElementById(`approve-from-${id}`);
+        const toInput = document.getElementById(`approve-to-${id}`);
+        const remarksInput = document.getElementById(`approve-remarks-${id}`);
+        
+        const payload = {
+          decision: 'approved',
+          remarks: remarksInput?.value || '',
+          from_datetime: fromInput?.value || '',
+          to_datetime: toInput?.value || ''
+        };
+        
+        await fetch(`/out_pass/${id}/decision`, { 
+          method: 'POST', 
+          headers: {'Content-Type': 'application/json'}, 
+          body: JSON.stringify(payload) 
+        });
+        
+        // Hide form and refresh
+        hideApprovalForm(id);
+        if (window._teacherRefreshPasses) window._teacherRefreshPasses();
+      } catch(e) {
+        console.error('Error approving pass:', e);
+      }
+    }
+    
     window.teacherRejectPass = async function(id){
+      if (!confirm('Are you sure you want to reject this out pass request?')) return;
       try{
         await fetch(`/out_pass/${id}/decision`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ decision:'rejected' }) });
       }catch(e){}
       if (window._teacherRefreshPasses) window._teacherRefreshPasses();
     }
+
+    // Check for expired passes and show on teacher dashboard
+    async function checkExpiredPassesForTeacher() {
+      try {
+        const res = await fetch('/out_pass/expired');
+        const data = await res.json();
+        if (data.success && data.expired_passes && data.expired_passes.length > 0) {
+          const alertDiv = document.getElementById('teacher-expired-alert');
+          const detailsDiv = document.getElementById('teacher-expired-details');
+          
+          if (alertDiv && detailsDiv) {
+            alertDiv.classList.remove('hidden');
+            detailsDiv.innerHTML = data.expired_passes.slice(0, 5).map(p => {
+              const returnStatus = p.returned_to_campus === 'yes' 
+                ? '<span class="text-green-400 text-xs"><i class="fas fa-check-circle mr-1"></i>Returned to Campus</span>'
+                : p.returned_to_campus === 'no'
+                ? '<span class="text-yellow-400 text-xs"><i class="fas fa-exclamation-circle mr-1"></i>Not Yet Returned</span>'
+                : '<span class="text-gray-400 text-xs"><i class="fas fa-question-circle mr-1"></i>Status Unknown</span>';
+              
+              return `
+              <div class="bg-red-900/30 p-2 rounded">
+                <div class="flex justify-between items-start">
+                  <div class="flex-1">
+                    <div class="font-semibold">${p.requester_name || 'Unknown'} (${p.rollno || 'N/A'})</div>
+                    <div class="text-xs text-white/70">${p.pass_type || 'Out Pass'} - Expired: ${new Date(p.to_datetime).toLocaleString()}</div>
+                  </div>
+                  <div class="ml-2">${returnStatus}</div>
+                </div>
+              </div>
+            `;
+            }).join('');
+            
+            if (data.expired_passes.length > 5) {
+              detailsDiv.innerHTML += `<div class="text-xs text-white/60 mt-2">+ ${data.expired_passes.length - 5} more expired passes</div>`;
+            }
+          }
+          
+          // Update badge
+          updateTeacherExpiredBadge(data.count);
+        }
+      } catch (e) {
+        console.error('Error checking expired passes:', e);
+      }
+    }
+
+    // Update expired pass badge for teachers
+    function updateTeacherExpiredBadge(count) {
+      const badge = document.getElementById('expired-pass-badge');
+      if (badge && !teacherPassBadgeViewed) {
+        if (count > 0) {
+          badge.textContent = count;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+    }
+
+    // Leave Approvals Functions
+    async function loadLeaveApprovals() {
+      const tbody = document.getElementById('leave-approvals-tbody');
+      const refreshBtn = document.getElementById('refresh-leave-approvals');
+      
+      const fetchLeaveRequests = async () => {
+        try {
+          const res = await fetch('/leave_request/pending');
+          const data = await res.json();
+          
+          if (data.success && data.leave_requests && data.leave_requests.length > 0) {
+            tbody.innerHTML = data.leave_requests.map(req => `
+              <tr class="border-b border-white/5 hover:bg-white/5">
+                <td class="px-4 py-3 text-sm text-on-dark">${req.student_name || '-'}</td>
+                <td class="px-4 py-3 text-sm text-on-dark">${req.rollno || '-'}</td>
+                <td class="px-4 py-3 text-sm text-on-dark">${req.leave_type || '-'}</td>
+                <td class="px-4 py-3 text-sm text-on-dark">${req.from_date || '-'}</td>
+                <td class="px-4 py-3 text-sm text-on-dark">${req.to_date || '-'}</td>
+                <td class="px-4 py-3 text-sm text-on-dark max-w-xs truncate" title="${req.reason || '-'}">${req.reason || '-'}</td>
+                <td class="px-4 py-3 text-sm">
+                  <div class="flex gap-2">
+                    <button onclick="approveLeaveRequest(${req.id})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition-all">
+                      <i class="fas fa-check mr-1"></i>Approve
+                    </button>
+                    <button onclick="rejectLeaveRequest(${req.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-all">
+                      <i class="fas fa-times mr-1"></i>Reject
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join('');
+            
+            // Update badge
+            const badge = document.getElementById('leave-pending-badge');
+            if (badge && !teacherLeaveBadgeViewed) {
+              badge.textContent = data.leave_requests.length;
+              badge.classList.remove('hidden');
+            }
+          } else {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-white/60">No pending leave requests</td></tr>';
+            const badge = document.getElementById('leave-pending-badge');
+            if (badge) badge.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error('Error loading leave requests:', e);
+          tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">Error loading leave requests</td></tr>';
+        }
+      };
+      
+      await fetchLeaveRequests();
+      
+      if (refreshBtn) {
+        refreshBtn.onclick = fetchLeaveRequests;
+      }
+    }
+    
+    window.approveLeaveRequest = async function(leaveId) {
+      const remarks = prompt('Enter remarks (optional):');
+      if (remarks === null) return; // User cancelled
+      
+      try {
+        const res = await fetch(`/leave_request/${leaveId}/decision`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ decision: 'approved', remarks: remarks || '' })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('✅ Leave request approved! Student will be notified.');
+          loadLeaveApprovals();
+        } else {
+          alert('❌ Error: ' + (data.message || 'Failed to approve leave request'));
+        }
+      } catch (e) {
+        console.error('Error approving leave request:', e);
+        alert('❌ Error approving leave request. Please try again.');
+      }
+    };
+    
+    window.rejectLeaveRequest = async function(leaveId) {
+      const remarks = prompt('Enter reason for rejection:');
+      if (!remarks) {
+        alert('Please provide a reason for rejection.');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/leave_request/${leaveId}/decision`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ decision: 'rejected', remarks: remarks })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('❌ Leave request rejected. Student will be notified.');
+          loadLeaveApprovals();
+        } else {
+          alert('❌ Error: ' + (data.message || 'Failed to reject leave request'));
+        }
+      } catch (e) {
+        console.error('Error rejecting leave request:', e);
+        alert('❌ Error rejecting leave request. Please try again.');
+      }
+    };
 
     function initSearch() {
       const searchInput = document.getElementById('search-bar');
